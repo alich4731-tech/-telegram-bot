@@ -15,13 +15,13 @@ URL = os.getenv("RENDER_EXTERNAL_URL")
 
 
 # ==========================================
-# منوی اصلی
+# صفحه اصلی
 # ==========================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        ["🎓 دوره‌ها", "📱 ارتباط با ما"]
+        ["🎓 دوره‌های آموزشی", "📱 ارتباط با ما"]
     ]
 
     reply_markup = ReplyKeyboardMarkup(
@@ -38,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==========================================
-# منوی دوره‌ها
+# دوره‌های آموزشی
 # ==========================================
 
 async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -68,7 +68,8 @@ async def power_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         ["📊 مشاهده و ثبت‌نام دوره"],
-        ["🔙 بازگشت"]
+        ["🔙 بازگشت"],
+        ["🏠 منوی اصلی"]
     ]
 
     reply_markup = ReplyKeyboardMarkup(
@@ -90,9 +91,20 @@ async def power_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def power_query_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    keyboard = [
+        ["🔙 بازگشت"],
+        ["🏠 منوی اصلی"]
+    ]
+
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True
+    )
+
     await update.message.reply_text(
         "📊 مشاهده و ثبت‌نام دوره پاور کوئری:\n\n"
-        "https://maliplusco.ir/product/%d8%af%d9%88%d8%b1%d9%87-%d8%a2%d9%85%d9%88%d8%b2%d8%b4-%d9%be%d8%a7%d9%88%d8%b1-%da%a9%d9%88%d8%a6%d8%b1%db%8c/"
+        "https://maliplusco.ir/product/%d8%af%d9%88%d8%b1%d9%87-%d8%a2%d9%85%d9%88%d8%b2%d8%b4-%d9%be%d8%a7%d9%88%d8%b1-%da%a9%d9%88%d8%a6%d8%b1%db%8c/",
+        reply_markup=reply_markup
     )
 
 
@@ -164,19 +176,22 @@ async def rubika(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = Application.builder().token(TOKEN).build()
 
 
+# ==========================================
 # /start
+# ==========================================
+
 app.add_handler(
     CommandHandler("start", start)
 )
 
 
-# =========================
-# منوی اصلی
-# =========================
+# ==========================================
+# صفحه اصلی
+# ==========================================
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🎓 دوره‌ها"]),
+        filters.Text(["🎓 دوره‌های آموزشی"]),
         courses
     )
 )
@@ -189,9 +204,9 @@ app.add_handler(
 )
 
 
-# =========================
-# منوی دوره‌ها
-# =========================
+# ==========================================
+# دوره آموزش پاور کوئری
+# ==========================================
 
 app.add_handler(
     MessageHandler(
@@ -201,9 +216,9 @@ app.add_handler(
 )
 
 
-# =========================
-# پاور کوئری
-# =========================
+# ==========================================
+# مشاهده دوره
+# ==========================================
 
 app.add_handler(
     MessageHandler(
@@ -213,9 +228,9 @@ app.add_handler(
 )
 
 
-# =========================
+# ==========================================
 # ارتباط با ما
-# =========================
+# ==========================================
 
 app.add_handler(
     MessageHandler(
@@ -239,14 +254,26 @@ app.add_handler(
 )
 
 
-# =========================
-# بازگشت‌ها
-# =========================
+# ==========================================
+# بازگشت یک مرحله‌ای
+# ==========================================
 
-# بازگشت از دوره‌ها به منوی اصلی
+# از دوره‌های آموزشی → صفحه اصلی
 app.add_handler(
     MessageHandler(
         filters.Text(["🔙 بازگشت"]),
+        start
+    )
+)
+
+
+# ==========================================
+# منوی اصلی
+# ==========================================
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["🏠 منوی اصلی"]),
         start
     )
 )
