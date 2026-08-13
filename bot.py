@@ -23,7 +23,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["menu_level"] = "main"
 
     keyboard = [
-        ["🎓 دوره‌های آموزشی", "📱 ارتباط با ما"]
+        ["🎓 دوره‌های آموزشی", "📱 ارتباط با ما"],
+        ["🎬 ویدئوهای آموزشی"]
     ]
 
     reply_markup = ReplyKeyboardMarkup(
@@ -230,6 +231,152 @@ async def rubika(
 
 
 # =========================================================
+# ویدئوهای آموزشی
+# =========================================================
+
+async def educational_videos(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    context.user_data["menu_level"] = "educational_videos"
+
+    keyboard = [
+        ["📗 ویدئوهای آموزشی مقدماتی اکسل"],
+        ["📘 ویدئوهای آموزشی نیمه پیشرفته اکسل"],
+        ["🔙 بازگشت"],
+        ["🏠 منوی اصلی"]
+    ]
+
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True
+    )
+
+    await update.message.reply_text(
+        "🎬 ویدئوهای آموزشی\n\n"
+        "سطح آموزشی مورد نظر خود را انتخاب کنید:",
+        reply_markup=reply_markup
+    )
+
+
+# =========================================================
+# ویدئوهای آموزشی مقدماتی اکسل
+# =========================================================
+
+async def excel_beginner(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    context.user_data["menu_level"] = "excel_beginner"
+
+    keyboard = [
+        ["📥 لینک‌های دانلود دوره"],
+        ["🔙 بازگشت"],
+        ["🏠 منوی اصلی"]
+    ]
+
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True
+    )
+
+    await update.message.reply_text(
+        "📗 ویدئوهای آموزشی مقدماتی اکسل\n\n"
+        "برای دریافت لینک‌های دانلود ویدئوهای آموزشی، "
+        "گزینه زیر را انتخاب کنید:",
+        reply_markup=reply_markup
+    )
+
+
+# =========================================================
+# لینک دانلود مقدماتی اکسل
+# =========================================================
+
+async def excel_beginner_download(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    context.user_data["menu_level"] = "excel_beginner_download"
+
+    keyboard = [
+        ["🔙 بازگشت"],
+        ["🏠 منوی اصلی"]
+    ]
+
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True
+    )
+
+    await update.message.reply_text(
+        "📥 لینک دانلود ویدئوهای آموزشی مقدماتی اکسل:\n\n"
+        "https://my.uupload.ir/f/alichavoshi/ویدئو%20کوتاه%20آموزشی%20اکسل",
+        reply_markup=reply_markup
+    )
+
+
+# =========================================================
+# ویدئوهای آموزشی نیمه پیشرفته اکسل
+# =========================================================
+
+async def excel_intermediate(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    context.user_data["menu_level"] = "excel_intermediate"
+
+    keyboard = [
+        ["📥 لینک‌های دانلود دوره"],
+        ["🔙 بازگشت"],
+        ["🏠 منوی اصلی"]
+    ]
+
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True
+    )
+
+    await update.message.reply_text(
+        "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل\n\n"
+        "برای دریافت لینک‌های دانلود ویدئوهای آموزشی، "
+        "گزینه زیر را انتخاب کنید:",
+        reply_markup=reply_markup
+    )
+
+
+# =========================================================
+# لینک دانلود نیمه پیشرفته اکسل
+# =========================================================
+
+async def excel_intermediate_download(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    context.user_data["menu_level"] = "excel_intermediate_download"
+
+    keyboard = [
+        ["🔙 بازگشت"],
+        ["🏠 منوی اصلی"]
+    ]
+
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True
+    )
+
+    await update.message.reply_text(
+        "📥 لینک دانلود ویدئوهای آموزشی سطح نیمه پیشرفته:\n\n"
+        "https://my.uupload.ir/f/alichavoshi/ویدئو%20های%20آموزشی%20سطح%20نیمه%20پیشرفته",
+        reply_markup=reply_markup
+    )
+
+
+# =========================================================
 # بازگشت یک مرحله‌ای
 # =========================================================
 
@@ -240,60 +387,56 @@ async def back(
 
     level = context.user_data.get("menu_level")
 
-    # -----------------------------------------
-    # از پاور کوئری → دوره‌های آموزشی
-    # -----------------------------------------
+    # -----------------------------------------------------
+    # دوره‌های آموزشی
+    # -----------------------------------------------------
 
     if level == "power_query":
-
         await courses(update, context)
 
-    # -----------------------------------------
-    # از صفحه لینک دوره → پاور کوئری
-    # -----------------------------------------
-
     elif level == "power_query_link":
-
         await power_query(update, context)
 
-    # -----------------------------------------
-    # از دوره‌های آموزشی → صفحه اصلی
-    # -----------------------------------------
-
     elif level == "courses":
-
         await start(update, context)
 
-    # -----------------------------------------
-    # از اینستاگرام → لیست ارتباط با ما
-    # -----------------------------------------
+    # -----------------------------------------------------
+    # ارتباط با ما
+    # -----------------------------------------------------
 
     elif level == "instagram":
-
         await contact(update, context)
-
-    # -----------------------------------------
-    # از تلگرام → لیست ارتباط با ما
-    # -----------------------------------------
 
     elif level == "telegram":
-
         await contact(update, context)
-
-    # -----------------------------------------
-    # از روبیکا → لیست ارتباط با ما
-    # -----------------------------------------
 
     elif level == "rubika":
-
         await contact(update, context)
 
-    # -----------------------------------------
+    # -----------------------------------------------------
+    # ویدئوهای آموزشی
+    # -----------------------------------------------------
+
+    elif level == "educational_videos":
+        await start(update, context)
+
+    elif level == "excel_beginner":
+        await educational_videos(update, context)
+
+    elif level == "excel_beginner_download":
+        await excel_beginner(update, context)
+
+    elif level == "excel_intermediate":
+        await educational_videos(update, context)
+
+    elif level == "excel_intermediate_download":
+        await excel_intermediate(update, context)
+
+    # -----------------------------------------------------
     # حالت پیش‌فرض
-    # -----------------------------------------
+    # -----------------------------------------------------
 
     else:
-
         await start(update, context)
 
 
@@ -326,7 +469,7 @@ app.add_handler(
 
 
 # =========================================================
-# صفحه اصلی
+# منوی اصلی
 # =========================================================
 
 app.add_handler(
@@ -343,9 +486,16 @@ app.add_handler(
     )
 )
 
+app.add_handler(
+    MessageHandler(
+        filters.Text(["🎬 ویدئوهای آموزشی"]),
+        educational_videos
+    )
+)
+
 
 # =========================================================
-# دوره آموزش پاور کوئری
+# دوره‌های آموزشی
 # =========================================================
 
 app.add_handler(
@@ -354,11 +504,6 @@ app.add_handler(
         power_query
     )
 )
-
-
-# =========================================================
-# مشاهده و ثبت‌نام دوره
-# =========================================================
 
 app.add_handler(
     MessageHandler(
@@ -390,6 +535,36 @@ app.add_handler(
     MessageHandler(
         filters.Text(["🟠 کانال روبیکا"]),
         rubika
+    )
+)
+
+
+# =========================================================
+# ویدئوهای آموزشی
+# =========================================================
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["📗 ویدئوهای آموزشی مقدماتی اکسل"]),
+        excel_beginner
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["📘 ویدئوهای آموزشی نیمه پیشرفته اکسل"]),
+        excel_intermediate
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["📥 لینک‌های دانلود دوره"]),
+        lambda update, context: (
+            excel_beginner_download(update, context)
+            if context.user_data.get("menu_level") == "excel_beginner"
+            else excel_intermediate_download(update, context)
+        )
     )
 )
 
