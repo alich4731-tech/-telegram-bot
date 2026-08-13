@@ -20,13 +20,10 @@ URL = os.getenv("RENDER_EXTERNAL_URL")
 
 
 # =========================================================
-# ابزار ساخت کیبورد
+# تابع ساخت کیبورد
 # =========================================================
 
 def create_keyboard(buttons):
-    """
-    ساخت Reply Keyboard به صورت یکپارچه
-    """
     return ReplyKeyboardMarkup(
         buttons,
         resize_keyboard=True
@@ -89,7 +86,7 @@ async def in_person_courses(
     keyboard = [
         ["📊 دوره آموزش پاور کوئری"],
         ["📑 دوره سامانه مودیان"],
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -111,7 +108,7 @@ async def online_courses(
     context.user_data["menu_level"] = "online_courses"
 
     keyboard = [
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -133,7 +130,7 @@ async def tax_system(
     context.user_data["menu_level"] = "tax_system"
 
     keyboard = [
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -156,7 +153,7 @@ async def power_query(
 
     keyboard = [
         ["📊 مشاهده و ثبت‌نام دوره"],
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -179,8 +176,7 @@ async def power_query_link(
     context.user_data["menu_level"] = "power_query_link"
 
     keyboard = [
-        ["🔙 بازگشت"],
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -320,7 +316,7 @@ async def excel_beginner(
 
     keyboard = [
         ["📥 لینک‌های دانلود دوره"],
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -343,7 +339,7 @@ async def excel_beginner_download(
     context.user_data["menu_level"] = "excel_beginner_download"
 
     keyboard = [
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -366,7 +362,7 @@ async def excel_intermediate(
 
     keyboard = [
         ["📥 لینک‌های دانلود دوره"],
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -389,7 +385,7 @@ async def excel_intermediate_download(
     context.user_data["menu_level"] = "excel_intermediate_download"
 
     keyboard = [
-        ["🏠 منوی اصلی"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     await update.message.reply_text(
@@ -400,7 +396,7 @@ async def excel_intermediate_download(
 
 
 # =========================================================
-# بازگشت
+# سیستم بازگشت
 # =========================================================
 
 async def back(
@@ -414,25 +410,40 @@ async def back(
     # دوره‌های آموزشی
     # -----------------------------------------------------
 
-    if level == "power_query_link":
+    if level == "in_person_courses":
 
-        await power_query(update, context)
+        await courses(update, context)
+
+    elif level == "online_courses":
+
+        await courses(update, context)
+
+    elif level == "tax_system":
+
+        await in_person_courses(update, context)
 
     elif level == "power_query":
 
         await in_person_courses(update, context)
+
+    elif level == "power_query_link":
+
+        await power_query(update, context)
 
     # -----------------------------------------------------
     # ارتباط با ما
     # -----------------------------------------------------
 
     elif level == "instagram":
+
         await contact(update, context)
 
     elif level == "telegram":
+
         await contact(update, context)
 
     elif level == "rubika":
+
         await contact(update, context)
 
     # -----------------------------------------------------
@@ -440,16 +451,27 @@ async def back(
     # -----------------------------------------------------
 
     elif level == "excel_beginner":
+
         await educational_videos(update, context)
 
+    elif level == "excel_beginner_download":
+
+        await excel_beginner(update, context)
+
     elif level == "excel_intermediate":
+
         await educational_videos(update, context)
+
+    elif level == "excel_intermediate_download":
+
+        await excel_intermediate(update, context)
 
     # -----------------------------------------------------
     # حالت پیش‌فرض
     # -----------------------------------------------------
 
     else:
+
         await start(update, context)
 
 
