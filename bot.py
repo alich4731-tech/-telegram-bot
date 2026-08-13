@@ -20,7 +20,21 @@ URL = os.getenv("RENDER_EXTERNAL_URL")
 
 
 # =========================================================
-# صفحه اصلی
+# ابزار ساخت کیبورد
+# =========================================================
+
+def create_keyboard(buttons):
+    """
+    ساخت Reply Keyboard به صورت یکپارچه
+    """
+    return ReplyKeyboardMarkup(
+        buttons,
+        resize_keyboard=True
+    )
+
+
+# =========================================================
+# منوی اصلی
 # =========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -28,20 +42,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["menu_level"] = "main"
 
     keyboard = [
-        ["🎓 دوره‌های آموزشی", "📱 ارتباط با ما"],
-        ["🎬 ویدئوهای آموزشی"]
+        ["🎓 دوره‌های آموزشی", "🎬 ویدئوهای آموزشی"],
+        ["📱 ارتباط با ما"]
     ]
-
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
 
     await update.message.reply_text(
         "سلام 👋\n\n"
         "به ربات ما خوش آمدید 🌱\n\n"
         "از منوی زیر گزینه مورد نظر خود را انتخاب کنید.",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -54,19 +63,83 @@ async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["menu_level"] = "courses"
 
     keyboard = [
-        ["📊 دوره آموزش پاور کوئری"],
-        ["🔙 بازگشت"]
+        ["🏫 دوره‌های آموزشی حضوری"],
+        ["💻 دوره‌های آموزشی آنلاین"],
+        ["🏠 منوی اصلی"]
     ]
-
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
 
     await update.message.reply_text(
         "🎓 دوره‌های آموزشی\n\n"
+        "نوع دوره مورد نظر خود را انتخاب کنید:",
+        reply_markup=create_keyboard(keyboard)
+    )
+
+
+# =========================================================
+# دوره‌های آموزشی حضوری
+# =========================================================
+
+async def in_person_courses(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    context.user_data["menu_level"] = "in_person_courses"
+
+    keyboard = [
+        ["📊 دوره آموزش پاور کوئری"],
+        ["📑 دوره سامانه مودیان"],
+        ["🏠 منوی اصلی"]
+    ]
+
+    await update.message.reply_text(
+        "🏫 دوره‌های آموزشی حضوری\n\n"
         "دوره مورد نظر خود را انتخاب کنید:",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
+    )
+
+
+# =========================================================
+# دوره‌های آموزشی آنلاین
+# =========================================================
+
+async def online_courses(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    context.user_data["menu_level"] = "online_courses"
+
+    keyboard = [
+        ["🏠 منوی اصلی"]
+    ]
+
+    await update.message.reply_text(
+        "💻 دوره‌های آموزشی آنلاین\n\n"
+        "در حال حاضر دوره‌ای در این بخش قرار نگرفته است.",
+        reply_markup=create_keyboard(keyboard)
+    )
+
+
+# =========================================================
+# دوره سامانه مودیان
+# =========================================================
+
+async def tax_system(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    context.user_data["menu_level"] = "tax_system"
+
+    keyboard = [
+        ["🏠 منوی اصلی"]
+    ]
+
+    await update.message.reply_text(
+        "📑 دوره آموزش سامانه مودیان\n\n"
+        "اطلاعات این دوره به‌زودی در ربات قرار خواهد گرفت.",
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -74,26 +147,23 @@ async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # دوره آموزش پاور کوئری
 # =========================================================
 
-async def power_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def power_query(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     context.user_data["menu_level"] = "power_query"
 
     keyboard = [
         ["📊 مشاهده و ثبت‌نام دوره"],
-        ["🔙 بازگشت"],
         ["🏠 منوی اصلی"]
     ]
-
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
 
     await update.message.reply_text(
         "📊 دوره آموزش پاور کوئری\n\n"
         "برای مشاهده جزئیات دوره و ثبت‌نام، "
         "گزینه زیر را انتخاب کنید:",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -113,17 +183,12 @@ async def power_query_link(
         ["🏠 منوی اصلی"]
     ]
 
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
-
     await update.message.reply_text(
         "📊 دوره آموزش پاور کوئری\n\n"
         "برای مشاهده جزئیات و ثبت‌نام دوره، "
         "روی لینک زیر کلیک کنید:\n\n"
         "https://maliplusco.ir/product/%d8%af%d9%88%d8%b1%d9%87-%d8%a2%d9%85%d9%88%d8%b2%d8%b4-%d9%be%d8%a7%d9%88%d8%b1-%da%a9%d9%88%d8%a6%d8%b1%db%8c/",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -131,7 +196,10 @@ async def power_query_link(
 # ارتباط با ما
 # =========================================================
 
-async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def contact(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     context.user_data["menu_level"] = "contact"
 
@@ -142,15 +210,10 @@ async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ["🏠 منوی اصلی"]
     ]
 
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
-
     await update.message.reply_text(
         "📱 راه‌های ارتباط با ما:\n\n"
         "یکی از گزینه‌های زیر را انتخاب کنید:",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -169,15 +232,10 @@ async def instagram(
         ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
-
     await update.message.reply_text(
         "📸 اینستاگرام:\n\n"
         "https://instagram.com/ali_chavoshi.official",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -196,15 +254,10 @@ async def telegram_channel(
         ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
-
     await update.message.reply_text(
         "📢 کانال تلگرام:\n\n"
         "https://t.me/Alichavoshiaccounting",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -223,15 +276,10 @@ async def rubika(
         ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
-
     await update.message.reply_text(
         "🟠 کانال روبیکا:\n\n"
         "https://rubika.ir/Alichavoshiaccounting",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -249,19 +297,13 @@ async def educational_videos(
     keyboard = [
         ["📗 ویدئوهای آموزشی مقدماتی اکسل"],
         ["📘 ویدئوهای آموزشی نیمه پیشرفته اکسل"],
-        ["🔙 بازگشت"],
         ["🏠 منوی اصلی"]
     ]
-
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
 
     await update.message.reply_text(
         "🎬 ویدئوهای آموزشی\n\n"
         "سطح آموزشی مورد نظر خود را انتخاب کنید:",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -278,20 +320,14 @@ async def excel_beginner(
 
     keyboard = [
         ["📥 لینک‌های دانلود دوره"],
-        ["🔙 بازگشت"],
         ["🏠 منوی اصلی"]
     ]
-
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
 
     await update.message.reply_text(
         "📗 ویدئوهای آموزشی مقدماتی اکسل\n\n"
         "برای دریافت لینک دانلود ویدئوهای آموزشی، "
         "گزینه زیر را انتخاب کنید:",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -307,19 +343,13 @@ async def excel_beginner_download(
     context.user_data["menu_level"] = "excel_beginner_download"
 
     keyboard = [
-        ["🔙 بازگشت"],
         ["🏠 منوی اصلی"]
     ]
-
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
 
     await update.message.reply_text(
         "📥 لینک دانلود ویدئوهای آموزشی مقدماتی اکسل:\n\n"
         "https://my.uupload.ir/d/pVZXk",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -336,20 +366,14 @@ async def excel_intermediate(
 
     keyboard = [
         ["📥 لینک‌های دانلود دوره"],
-        ["🔙 بازگشت"],
         ["🏠 منوی اصلی"]
     ]
-
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
 
     await update.message.reply_text(
         "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل\n\n"
         "برای دریافت لینک دانلود ویدئوهای آموزشی، "
         "گزینه زیر را انتخاب کنید:",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
@@ -365,24 +389,18 @@ async def excel_intermediate_download(
     context.user_data["menu_level"] = "excel_intermediate_download"
 
     keyboard = [
-        ["🔙 بازگشت"],
         ["🏠 منوی اصلی"]
     ]
-
-    reply_markup = ReplyKeyboardMarkup(
-        keyboard,
-        resize_keyboard=True
-    )
 
     await update.message.reply_text(
         "📥 لینک دانلود ویدئوهای آموزشی سطح نیمه پیشرفته:\n\n"
         "https://my.uupload.ir/d/YL2XN",
-        reply_markup=reply_markup
+        reply_markup=create_keyboard(keyboard)
     )
 
 
 # =========================================================
-# بازگشت یک مرحله‌ای
+# بازگشت
 # =========================================================
 
 async def back(
@@ -396,64 +414,42 @@ async def back(
     # دوره‌های آموزشی
     # -----------------------------------------------------
 
-    if level == "power_query":
-
-        await courses(update, context)
-
-    elif level == "power_query_link":
+    if level == "power_query_link":
 
         await power_query(update, context)
 
-    elif level == "courses":
+    elif level == "power_query":
 
-        await start(update, context)
+        await in_person_courses(update, context)
 
     # -----------------------------------------------------
     # ارتباط با ما
     # -----------------------------------------------------
 
     elif level == "instagram":
-
         await contact(update, context)
 
     elif level == "telegram":
-
         await contact(update, context)
 
     elif level == "rubika":
-
         await contact(update, context)
 
     # -----------------------------------------------------
     # ویدئوهای آموزشی
     # -----------------------------------------------------
 
-    elif level == "educational_videos":
-
-        await start(update, context)
-
     elif level == "excel_beginner":
-
         await educational_videos(update, context)
-
-    elif level == "excel_beginner_download":
-
-        await excel_beginner(update, context)
 
     elif level == "excel_intermediate":
-
         await educational_videos(update, context)
-
-    elif level == "excel_intermediate_download":
-
-        await excel_intermediate(update, context)
 
     # -----------------------------------------------------
     # حالت پیش‌فرض
     # -----------------------------------------------------
 
     else:
-
         await start(update, context)
 
 
@@ -518,15 +514,15 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📱 ارتباط با ما"]),
-        contact
+        filters.Text(["🎬 ویدئوهای آموزشی"]),
+        educational_videos
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🎬 ویدئوهای آموزشی"]),
-        educational_videos
+        filters.Text(["📱 ارتباط با ما"]),
+        contact
     )
 )
 
@@ -537,8 +533,34 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
+        filters.Text(["🏫 دوره‌های آموزشی حضوری"]),
+        in_person_courses
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["💻 دوره‌های آموزشی آنلاین"]),
+        online_courses
+    )
+)
+
+
+# =========================================================
+# دوره‌های حضوری
+# =========================================================
+
+app.add_handler(
+    MessageHandler(
         filters.Text(["📊 دوره آموزش پاور کوئری"]),
         power_query
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["📑 دوره سامانه مودیان"]),
+        tax_system
     )
 )
 
