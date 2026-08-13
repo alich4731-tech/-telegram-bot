@@ -1,12 +1,6 @@
 import os
 
-from telegram import (
-    Update,
-    ReplyKeyboardMarkup,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton
-)
-
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -15,15 +9,14 @@ from telegram.ext import (
     filters
 )
 
-
 TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", "10000"))
 URL = os.getenv("RENDER_EXTERNAL_URL")
 
 
-# ==========================================
+# =========================
 # منوی اصلی
-# ==========================================
+# =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -44,9 +37,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ==========================================
-# منوی دوره‌ها
-# ==========================================
+# =========================
+# دوره‌ها
+# =========================
 
 async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -62,28 +55,22 @@ async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "🎓 دوره‌های آموزشی\n\n"
-        "برای مشاهده اطلاعات دوره، گزینه زیر را انتخاب کنید:",
+        "دوره مورد نظر خود را انتخاب کنید:",
         reply_markup=reply_markup
     )
 
 
-# ==========================================
+# =========================
 # دوره پاور کوئری
-# ==========================================
+# =========================
 
 async def power_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [
             InlineKeyboardButton(
-                "📊 مشاهده و ثبت‌نام دوره",
+                "📊 مشاهده و ثبت‌نام دوره پاور کوئری",
                 url="https://maliplusco.ir/product/%d8%af%d9%88%d8%b1%d9%87-%d8%a2%d9%85%d9%88%d8%b2%d8%b4-%d9%be%d8%a7%d9%88%d8%b1-%da%a9%d9%88%d8%a6%d8%b1%db%8c/"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🔙 بازگشت به دوره‌ها",
-                callback_data="back_courses"
             )
         ]
     ]
@@ -92,105 +79,60 @@ async def power_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "📊 دوره آموزش پاور کوئری\n\n"
-        "برای مشاهده جزئیات دوره، سرفصل‌ها و ثبت‌نام "
-        "روی دکمه زیر بزنید:",
+        "برای مشاهده جزئیات و ثبت‌نام دوره، "
+        "روی دکمه زیر بزنید.",
         reply_markup=reply_markup
     )
 
+    # نمایش دکمه بازگشت در منوی پایین
+    keyboard_back = [
+        ["🔙 بازگشت به دوره‌ها"]
+    ]
 
-# ==========================================
+    reply_markup_back = ReplyKeyboardMarkup(
+        keyboard_back,
+        resize_keyboard=True
+    )
+
+    await update.message.reply_text(
+        "برای بازگشت به لیست دوره‌ها:",
+        reply_markup=reply_markup_back
+    )
+
+
+# =========================
 # ارتباط با ما
-# ==========================================
+# =========================
 
 async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        [
-            InlineKeyboardButton(
-                "📸 اینستاگرام",
-                url="https://instagram.com/ali_chavoshi.official"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "📢 کانال تلگرام",
-                url="https://t.me/Alichavoshiaccounting"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🟠 کانال روبیکا",
-                url="https://rubika.ir/Alichavoshiaccounting"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🔙 بازگشت",
-                callback_data="back_main"
-            )
-        ]
+        ["🔙 بازگشت"]
     ]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True
+    )
 
     await update.message.reply_text(
         "📱 راه‌های ارتباط با ما:\n\n"
-        "برای ورود به شبکه‌های اجتماعی، "
-        "گزینه مورد نظر را انتخاب کنید:",
+
+        "📸 اینستاگرام:\n"
+        "https://instagram.com/ali_chavoshi.official\n\n"
+
+        "📢 کانال تلگرام:\n"
+        "https://t.me/Alichavoshiaccounting\n\n"
+
+        "🟠 کانال روبیکا:\n"
+        "https://rubika.ir/Alichavoshiaccounting",
         reply_markup=reply_markup
     )
 
 
-# ==========================================
-# مدیریت دکمه‌های Inline
-# ==========================================
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-
-    await query.answer()
-
-    # بازگشت به منوی اصلی
-    if query.data == "back_main":
-
-        keyboard = [
-            ["🎓 دوره‌ها", "📱 ارتباط با ما"]
-        ]
-
-        reply_markup = ReplyKeyboardMarkup(
-            keyboard,
-            resize_keyboard=True
-        )
-
-        await query.message.reply_text(
-            "منوی اصلی:",
-            reply_markup=reply_markup
-        )
-
-    # بازگشت به دوره‌ها
-    elif query.data == "back_courses":
-
-        keyboard = [
-            ["📊 دوره آموزش پاور کوئری"],
-            ["🔙 بازگشت"]
-        ]
-
-        reply_markup = ReplyKeyboardMarkup(
-            keyboard,
-            resize_keyboard=True
-        )
-
-        await query.message.reply_text(
-            "🎓 دوره‌های آموزشی\n\n"
-            "دوره مورد نظر خود را انتخاب کنید:",
-            reply_markup=reply_markup
-        )
-
-
-# ==========================================
-# Handler ها
-# ==========================================
+# =========================
+# ساخت ربات
+# =========================
 
 app = Application.builder().token(TOKEN).build()
 
@@ -237,18 +179,18 @@ app.add_handler(
 )
 
 
-# دکمه‌های Inline
+# بازگشت از پاور کوئری به دوره‌ها
 app.add_handler(
     MessageHandler(
-        filters.ALL,
-        button_handler
+        filters.Text(["🔙 بازگشت به دوره‌ها"]),
+        courses
     )
 )
 
 
-# ==========================================
-# اجرای Webhook
-# ==========================================
+# =========================
+# Webhook
+# =========================
 
 app.run_webhook(
     listen="0.0.0.0",
