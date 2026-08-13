@@ -9,6 +9,11 @@ from telegram.ext import (
     filters
 )
 
+
+# =========================================================
+# تنظیمات
+# =========================================================
+
 TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", "10000"))
 URL = os.getenv("RENDER_EXTERNAL_URL")
@@ -284,7 +289,7 @@ async def excel_beginner(
 
     await update.message.reply_text(
         "📗 ویدئوهای آموزشی مقدماتی اکسل\n\n"
-        "برای دریافت لینک‌های دانلود ویدئوهای آموزشی، "
+        "برای دریافت لینک دانلود ویدئوهای آموزشی، "
         "گزینه زیر را انتخاب کنید:",
         reply_markup=reply_markup
     )
@@ -313,7 +318,7 @@ async def excel_beginner_download(
 
     await update.message.reply_text(
         "📥 لینک دانلود ویدئوهای آموزشی مقدماتی اکسل:\n\n"
-        "https://my.uupload.ir/f/alichavoshi/ویدئو%20کوتاه%20آموزشی%20اکسل",
+        "https://my.uupload.ir/d/pVZXk",
         reply_markup=reply_markup
     )
 
@@ -342,7 +347,7 @@ async def excel_intermediate(
 
     await update.message.reply_text(
         "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل\n\n"
-        "برای دریافت لینک‌های دانلود ویدئوهای آموزشی، "
+        "برای دریافت لینک دانلود ویدئوهای آموزشی، "
         "گزینه زیر را انتخاب کنید:",
         reply_markup=reply_markup
     )
@@ -371,7 +376,7 @@ async def excel_intermediate_download(
 
     await update.message.reply_text(
         "📥 لینک دانلود ویدئوهای آموزشی سطح نیمه پیشرفته:\n\n"
-        "https://my.uupload.ir/f/alichavoshi/ویدئو%20های%20آموزشی%20سطح%20نیمه%20پیشرفته",
+        "https://my.uupload.ir/d/YL2XN",
         reply_markup=reply_markup
     )
 
@@ -392,12 +397,15 @@ async def back(
     # -----------------------------------------------------
 
     if level == "power_query":
+
         await courses(update, context)
 
     elif level == "power_query_link":
+
         await power_query(update, context)
 
     elif level == "courses":
+
         await start(update, context)
 
     # -----------------------------------------------------
@@ -405,12 +413,15 @@ async def back(
     # -----------------------------------------------------
 
     elif level == "instagram":
+
         await contact(update, context)
 
     elif level == "telegram":
+
         await contact(update, context)
 
     elif level == "rubika":
+
         await contact(update, context)
 
     # -----------------------------------------------------
@@ -418,18 +429,23 @@ async def back(
     # -----------------------------------------------------
 
     elif level == "educational_videos":
+
         await start(update, context)
 
     elif level == "excel_beginner":
+
         await educational_videos(update, context)
 
     elif level == "excel_beginner_download":
+
         await excel_beginner(update, context)
 
     elif level == "excel_intermediate":
+
         await educational_videos(update, context)
 
     elif level == "excel_intermediate_download":
+
         await excel_intermediate(update, context)
 
     # -----------------------------------------------------
@@ -437,6 +453,7 @@ async def back(
     # -----------------------------------------------------
 
     else:
+
         await start(update, context)
 
 
@@ -450,6 +467,26 @@ async def main_menu(
 ):
 
     await start(update, context)
+
+
+# =========================================================
+# مدیریت لینک دانلود
+# =========================================================
+
+async def download_links(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    level = context.user_data.get("menu_level")
+
+    if level == "excel_beginner":
+
+        await excel_beginner_download(update, context)
+
+    elif level == "excel_intermediate":
+
+        await excel_intermediate_download(update, context)
 
 
 # =========================================================
@@ -557,14 +594,15 @@ app.add_handler(
     )
 )
 
+
+# =========================================================
+# لینک‌های دانلود
+# =========================================================
+
 app.add_handler(
     MessageHandler(
         filters.Text(["📥 لینک‌های دانلود دوره"]),
-        lambda update, context: (
-            excel_beginner_download(update, context)
-            if context.user_data.get("menu_level") == "excel_beginner"
-            else excel_intermediate_download(update, context)
-        )
+        download_links
     )
 )
 
