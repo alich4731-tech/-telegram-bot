@@ -20,7 +20,6 @@ URL = os.getenv("RENDER_EXTERNAL_URL")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    # ثبت اینکه کاربر در صفحه اصلی است
     context.user_data["menu_level"] = "main"
 
     keyboard = [
@@ -46,7 +45,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    # ثبت مرحله فعلی
     context.user_data["menu_level"] = "courses"
 
     keyboard = [
@@ -72,7 +70,6 @@ async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def power_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    # ثبت مرحله فعلی
     context.user_data["menu_level"] = "power_query"
 
     keyboard = [
@@ -103,7 +100,6 @@ async def power_query_link(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    # چون وارد یک مرحله عمیق‌تر شده‌ایم
     context.user_data["menu_level"] = "power_query_link"
 
     keyboard = [
@@ -131,14 +127,13 @@ async def power_query_link(
 
 async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    # ثبت مرحله فعلی
     context.user_data["menu_level"] = "contact"
 
     keyboard = [
         ["📸 اینستاگرام"],
         ["📢 کانال تلگرام"],
         ["🟠 کانال روبیکا"],
-        ["🔙 بازگشت"]
+        ["🏠 منوی اصلی"]
     ]
 
     reply_markup = ReplyKeyboardMarkup(
@@ -162,8 +157,10 @@ async def instagram(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+    context.user_data["menu_level"] = "instagram"
+
     keyboard = [
-        ["🔙 بازگشت"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     reply_markup = ReplyKeyboardMarkup(
@@ -172,7 +169,7 @@ async def instagram(
     )
 
     await update.message.reply_text(
-        "📸 صفحه اینستاگرام:\n\n"
+        "📸 اینستاگرام:\n\n"
         "https://instagram.com/ali_chavoshi.official",
         reply_markup=reply_markup
     )
@@ -187,8 +184,10 @@ async def telegram_channel(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+    context.user_data["menu_level"] = "telegram"
+
     keyboard = [
-        ["🔙 بازگشت"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     reply_markup = ReplyKeyboardMarkup(
@@ -212,8 +211,10 @@ async def rubika(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+    context.user_data["menu_level"] = "rubika"
+
     keyboard = [
-        ["🔙 بازگشت"]
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
     ]
 
     reply_markup = ReplyKeyboardMarkup(
@@ -264,27 +265,31 @@ async def back(
         await start(update, context)
 
     # -----------------------------------------
-    # از ارتباط با ما → صفحه اصلی
+    # از اینستاگرام → لیست ارتباط با ما
     # -----------------------------------------
 
-    elif level == "contact":
-
-        await start(update, context)
-
-    # -----------------------------------------
-    # از شبکه‌های اجتماعی → ارتباط با ما
-    # -----------------------------------------
-
-    elif level in [
-        "instagram",
-        "telegram",
-        "rubika"
-    ]:
+    elif level == "instagram":
 
         await contact(update, context)
 
     # -----------------------------------------
-    # اگر مرحله مشخص نبود
+    # از تلگرام → لیست ارتباط با ما
+    # -----------------------------------------
+
+    elif level == "telegram":
+
+        await contact(update, context)
+
+    # -----------------------------------------
+    # از روبیکا → لیست ارتباط با ما
+    # -----------------------------------------
+
+    elif level == "rubika":
+
+        await contact(update, context)
+
+    # -----------------------------------------
+    # حالت پیش‌فرض
     # -----------------------------------------
 
     else:
