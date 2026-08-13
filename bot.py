@@ -1,6 +1,6 @@
 import os
 
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -14,9 +14,9 @@ PORT = int(os.getenv("PORT", "10000"))
 URL = os.getenv("RENDER_EXTERNAL_URL")
 
 
-# =========================
+# ==========================================
 # منوی اصلی
-# =========================
+# ==========================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -37,9 +37,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# =========================
-# دوره‌ها
-# =========================
+# ==========================================
+# منوی دوره‌ها
+# ==========================================
 
 async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -60,53 +60,52 @@ async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# =========================
+# ==========================================
 # دوره پاور کوئری
-# =========================
+# ==========================================
 
 async def power_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
-        [
-            InlineKeyboardButton(
-                "📊 مشاهده و ثبت‌نام دوره پاور کوئری",
-                url="https://maliplusco.ir/product/%d8%af%d9%88%d8%b1%d9%87-%d8%a2%d9%85%d9%88%d8%b2%d8%b4-%d9%be%d8%a7%d9%88%d8%b1-%da%a9%d9%88%d8%a6%d8%b1%db%8c/"
-            )
-        ]
+        ["📊 مشاهده و ثبت‌نام دوره"],
+        ["🔙 بازگشت"]
     ]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_text(
-        "📊 دوره آموزش پاور کوئری\n\n"
-        "برای مشاهده جزئیات و ثبت‌نام دوره، "
-        "روی دکمه زیر بزنید.",
-        reply_markup=reply_markup
-    )
-
-    # نمایش دکمه بازگشت در منوی پایین
-    keyboard_back = [
-        ["🔙 بازگشت به دوره‌ها"]
-    ]
-
-    reply_markup_back = ReplyKeyboardMarkup(
-        keyboard_back,
+    reply_markup = ReplyKeyboardMarkup(
+        keyboard,
         resize_keyboard=True
     )
 
     await update.message.reply_text(
-        "برای بازگشت به لیست دوره‌ها:",
-        reply_markup=reply_markup_back
+        "📊 دوره آموزش پاور کوئری\n\n"
+        "برای مشاهده جزئیات دوره و ثبت‌نام، "
+        "گزینه زیر را انتخاب کنید:",
+        reply_markup=reply_markup
     )
 
 
-# =========================
+# ==========================================
+# لینک دوره پاور کوئری
+# ==========================================
+
+async def power_query_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(
+        "📊 مشاهده و ثبت‌نام دوره پاور کوئری:\n\n"
+        "https://maliplusco.ir/product/%d8%af%d9%88%d8%b1%d9%87-%d8%a2%d9%85%d9%88%d8%b2%d8%b4-%d9%be%d8%a7%d9%88%d8%b1-%da%a9%d9%88%d8%a6%d8%b1%db%8c/"
+    )
+
+
+# ==========================================
 # ارتباط با ما
-# =========================
+# ==========================================
 
 async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
+        ["📸 اینستاگرام"],
+        ["📢 کانال تلگرام"],
+        ["🟠 کانال روبیکا"],
         ["🔙 بازگشت"]
     ]
 
@@ -117,22 +116,50 @@ async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "📱 راه‌های ارتباط با ما:\n\n"
-
-        "📸 اینستاگرام:\n"
-        "https://instagram.com/ali_chavoshi.official\n\n"
-
-        "📢 کانال تلگرام:\n"
-        "https://t.me/Alichavoshiaccounting\n\n"
-
-        "🟠 کانال روبیکا:\n"
-        "https://rubika.ir/Alichavoshiaccounting",
+        "یکی از گزینه‌های زیر را انتخاب کنید:",
         reply_markup=reply_markup
     )
 
 
-# =========================
+# ==========================================
+# اینستاگرام
+# ==========================================
+
+async def instagram(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(
+        "📸 اینستاگرام:\n\n"
+        "https://instagram.com/ali_chavoshi.official"
+    )
+
+
+# ==========================================
+# تلگرام
+# ==========================================
+
+async def telegram_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(
+        "📢 کانال تلگرام:\n\n"
+        "https://t.me/Alichavoshiaccounting"
+    )
+
+
+# ==========================================
+# روبیکا
+# ==========================================
+
+async def rubika(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(
+        "🟠 کانال روبیکا:\n\n"
+        "https://rubika.ir/Alichavoshiaccounting"
+    )
+
+
+# ==========================================
 # ساخت ربات
-# =========================
+# ==========================================
 
 app = Application.builder().token(TOKEN).build()
 
@@ -143,7 +170,10 @@ app.add_handler(
 )
 
 
-# دوره‌ها
+# =========================
+# منوی اصلی
+# =========================
+
 app.add_handler(
     MessageHandler(
         filters.Text(["🎓 دوره‌ها"]),
@@ -151,8 +181,18 @@ app.add_handler(
     )
 )
 
+app.add_handler(
+    MessageHandler(
+        filters.Text(["📱 ارتباط با ما"]),
+        contact
+    )
+)
 
-# پاور کوئری
+
+# =========================
+# منوی دوره‌ها
+# =========================
+
 app.add_handler(
     MessageHandler(
         filters.Text(["📊 دوره آموزش پاور کوئری"]),
@@ -161,14 +201,47 @@ app.add_handler(
 )
 
 
-# ارتباط با ما
+# =========================
+# پاور کوئری
+# =========================
+
 app.add_handler(
     MessageHandler(
-        filters.Text(["📱 ارتباط با ما"]),
-        contact
+        filters.Text(["📊 مشاهده و ثبت‌نام دوره"]),
+        power_query_link
     )
 )
 
+
+# =========================
+# ارتباط با ما
+# =========================
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["📸 اینستاگرام"]),
+        instagram
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["📢 کانال تلگرام"]),
+        telegram_channel
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(["🟠 کانال روبیکا"]),
+        rubika
+    )
+)
+
+
+# =========================
+# بازگشت‌ها
+# =========================
 
 # بازگشت از دوره‌ها به منوی اصلی
 app.add_handler(
@@ -179,18 +252,9 @@ app.add_handler(
 )
 
 
-# بازگشت از پاور کوئری به دوره‌ها
-app.add_handler(
-    MessageHandler(
-        filters.Text(["🔙 بازگشت به دوره‌ها"]),
-        courses
-    )
-)
-
-
-# =========================
-# Webhook
-# =========================
+# ==========================================
+# اجرای Webhook
+# ==========================================
 
 app.run_webhook(
     listen="0.0.0.0",
