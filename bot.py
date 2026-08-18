@@ -1,5 +1,5 @@
-```python
 import os
+
 from openai import OpenAI
 
 from telegram import Update, ReplyKeyboardMarkup
@@ -13,7 +13,7 @@ from telegram.ext import (
 
 
 # =========================================================
-# تنظیمات
+# تنظیمات اصلی
 # =========================================================
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -22,9 +22,28 @@ URL = os.getenv("RENDER_EXTERNAL_URL")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-client = OpenAI(
-    api_key=OPENAI_API_KEY
-)
+
+# =========================================================
+# بررسی تنظیمات
+# =========================================================
+
+if not TOKEN:
+    raise ValueError("BOT_TOKEN در Environment Variables تنظیم نشده است.")
+
+if not OPENAI_API_KEY:
+    print("WARNING: OPENAI_API_KEY تنظیم نشده است.")
+
+
+# =========================================================
+# اتصال به OpenAI
+# =========================================================
+
+client = None
+
+if OPENAI_API_KEY:
+    client = OpenAI(
+        api_key=OPENAI_API_KEY
+    )
 
 
 # =========================================================
@@ -61,6 +80,7 @@ AI_SYSTEM_PROMPT = """
 پاسخ‌ها باید به زبان فارسی باشند.
 
 سبک پاسخ:
+
 - ساده و قابل فهم
 - دقیق و تخصصی
 - آموزشی
@@ -68,16 +88,28 @@ AI_SYSTEM_PROMPT = """
 - بدون توضیحات غیرضروری
 
 در صورت نیاز برای آموزش:
+
 - مثال عددی ارائه کن.
 - ثبت حسابداری را با بدهکار و بستانکار نمایش بده.
-- مراحل انجام کار را توضیح بده.
+- مراحل انجام کار را مرحله به مرحله توضیح بده.
 - اصطلاحات تخصصی را ساده توضیح بده.
+- در مثال‌های حسابداری از اعداد واقعی و منطقی استفاده کن.
 
-اگر سوال مربوط به قوانین و مقررات مالیاتی ایران است و از آخرین تغییرات قانونی مطمئن نیستی،
-صراحتاً اعلام کن که قوانین و بخشنامه‌ها ممکن است تغییر کرده باشند.
+اگر سوال مربوط به قوانین و مقررات مالیاتی ایران است:
 
-اگر سوال کاملاً خارج از حوزه حسابداری، مالی، مالیاتی، حسابرسی،
-Excel یا Power Query مرتبط با حسابداری بود، پاسخ بده:
+- اگر از آخرین تغییرات قانونی مطمئن نیستی، صراحتاً اعلام کن که قوانین و بخشنامه‌ها ممکن است تغییر کرده باشند.
+- از بیان اطلاعات قطعی درباره قوانین جدید بدون اطمینان خودداری کن.
+
+اگر سوال کاملاً خارج از حوزه:
+
+- حسابداری
+- مالی
+- مالیاتی
+- حسابرسی
+- Excel
+- Power Query مرتبط با حسابداری
+
+بود، پاسخ بده:
 
 «من در این بخش فقط برای پاسخ‌گویی به سوالات مرتبط با حسابداری،
 مالی، مالیاتی، حسابرسی و Excel/Power Query مرتبط با حسابداری طراحی شده‌ام.»
@@ -87,10 +119,11 @@ Excel یا Power Query مرتبط با حسابداری بود، پاسخ بده
 
 
 # =========================================================
-# تابع ساخت کیبورد
+# ساخت کیبورد
 # =========================================================
 
 def create_keyboard(buttons):
+
     return ReplyKeyboardMarkup(
         buttons,
         resize_keyboard=True
@@ -101,7 +134,10 @@ def create_keyboard(buttons):
 # منوی اصلی
 # =========================================================
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     context.user_data["menu_level"] = "main"
     context.user_data["ai_mode"] = False
@@ -121,7 +157,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================================================
-# ورود به دستیار هوش مصنوعی
+# ورود به هوش مصنوعی
 # =========================================================
 
 async def ai_assistant(
@@ -147,7 +183,7 @@ async def ai_assistant(
         "«ثبت حسابداری خرید نسیه کالا چیست؟»\n\n"
         "یا:\n"
         "«تابع XLOOKUP در حسابداری چه کاربردی دارد؟»\n\n"
-        "🔙 برای خروج از بخش هوش مصنوعی، گزینه زیر را بزنید.",
+        "🔙 برای خروج از بخش هوش مصنوعی، گزینه زیر را انتخاب کنید.",
         reply_markup=create_keyboard(keyboard)
     )
 
@@ -167,7 +203,7 @@ async def exit_ai(
 
 
 # =========================================================
-# ارسال سوال به هوش مصنوعی
+# سوال از هوش مصنوعی
 # =========================================================
 
 async def ask_ai(
@@ -175,7 +211,7 @@ async def ask_ai(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    # اگر کاربر در حالت AI نیست، کاری انجام نده
+    # فقط زمانی که کاربر در بخش AI باشد
     if not context.user_data.get("ai_mode", False):
         return
 
@@ -185,19 +221,20 @@ async def ask_ai(
         return
 
     # -----------------------------------------------------
-    # بررسی API Key
+    # بررسی اتصال OpenAI
     # -----------------------------------------------------
 
-    if not OPENAI_API_KEY:
+    if not OPENAI_API_KEY or client is None:
 
         await update.message.reply_text(
-            "⚠️ اتصال هوش مصنوعی در حال حاضر تنظیم نشده است."
+            "⚠️ اتصال هوش مصنوعی هنوز در ربات تنظیم نشده است.\n\n"
+            "لطفاً تنظیمات OPENAI_API_KEY را در Render بررسی کنید."
         )
 
         return
 
     # -----------------------------------------------------
-    # نمایش پیام پردازش
+    # پیام پردازش
     # -----------------------------------------------------
 
     thinking_message = await update.message.reply_text(
@@ -217,16 +254,43 @@ async def ask_ai(
         if not answer:
 
             answer = (
-                "متأسفانه در حال حاضر پاسخی برای سوال شما پیدا نشد."
+                "متأسفانه در حال حاضر پاسخی برای سوال شما دریافت نشد."
             )
 
-        await thinking_message.edit_text(
-            answer
-        )
+        # -------------------------------------------------
+        # تلگرام محدودیت طول پیام دارد
+        # -------------------------------------------------
+
+        max_length = 4000
+
+        if len(answer) <= max_length:
+
+            await thinking_message.edit_text(
+                answer
+            )
+
+        else:
+
+            await thinking_message.edit_text(
+                answer[:max_length]
+            )
+
+            remaining_text = answer[max_length:]
+
+            while remaining_text:
+
+                chunk = remaining_text[:max_length]
+
+                await update.message.reply_text(
+                    chunk
+                )
+
+                remaining_text = remaining_text[max_length:]
 
     except Exception as e:
 
-        print("OPENAI ERROR:", e)
+        print("OPENAI ERROR:")
+        print(e)
 
         await thinking_message.edit_text(
             "⚠️ در ارتباط با هوش مصنوعی مشکلی ایجاد شد.\n\n"
@@ -238,7 +302,10 @@ async def ask_ai(
 # دوره‌های آموزشی
 # =========================================================
 
-async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def courses(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     context.user_data["menu_level"] = "courses"
 
@@ -256,7 +323,7 @@ async def courses(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================================================
-# دوره‌های آموزشی حضوری
+# دوره‌های حضوری
 # =========================================================
 
 async def in_person_courses(
@@ -280,7 +347,7 @@ async def in_person_courses(
 
 
 # =========================================================
-# دوره‌های آموزشی آنلاین
+# دوره‌های آنلاین
 # =========================================================
 
 async def online_courses(
@@ -324,7 +391,7 @@ async def tax_system(
 
 
 # =========================================================
-# دوره آموزش پاور کوئری
+# دوره پاور کوئری
 # =========================================================
 
 async def power_query(
@@ -366,7 +433,7 @@ async def power_query_link(
         "📊 دوره آموزش پاور کوئری\n\n"
         "برای مشاهده جزئیات و ثبت‌نام دوره، "
         "روی لینک زیر کلیک کنید:\n\n"
-        "https://maliplusco.ir/product/%d8%af%d9%88%d8%b1%d9%87-%d8%a2%d9%85%d9%88%d8%b2%d8%b4-%d9%be%d8%a7%d9%88%d8%b1-%da%a9%d9%88%d8%a6%d8%b1%db%8c/",
+        "https://maliplusco.ir/product/%d9%85%d9%88%d8%b1%d8%b3%d9%87-%d8%a2%d9%85%d9%88%d8%b2%d8%b4-%d9%be%d8%a7%d9%88%d8%b1-%da%a9%d9%88%d8%a6%d8%b1%db%8c/",
         reply_markup=create_keyboard(keyboard)
     )
 
@@ -487,7 +554,7 @@ async def educational_videos(
 
 
 # =========================================================
-# ویدئوهای آموزشی مقدماتی اکسل
+# اکسل مقدماتی
 # =========================================================
 
 async def excel_beginner(
@@ -511,7 +578,7 @@ async def excel_beginner(
 
 
 # =========================================================
-# لینک دانلود مقدماتی اکسل
+# دانلود اکسل مقدماتی
 # =========================================================
 
 async def excel_beginner_download(
@@ -533,7 +600,7 @@ async def excel_beginner_download(
 
 
 # =========================================================
-# ویدئوهای آموزشی نیمه پیشرفته اکسل
+# اکسل نیمه پیشرفته
 # =========================================================
 
 async def excel_intermediate(
@@ -557,7 +624,7 @@ async def excel_intermediate(
 
 
 # =========================================================
-# لینک دانلود نیمه پیشرفته اکسل
+# دانلود اکسل نیمه پیشرفته
 # =========================================================
 
 async def excel_intermediate_download(
@@ -579,7 +646,7 @@ async def excel_intermediate_download(
 
 
 # =========================================================
-# سیستم بازگشت
+# بازگشت
 # =========================================================
 
 async def back(
@@ -589,28 +656,16 @@ async def back(
 
     level = context.user_data.get("menu_level")
 
-    if level == "in_person_courses":
+    if level in ["in_person_courses", "online_courses"]:
         await courses(update, context)
 
-    elif level == "online_courses":
-        await courses(update, context)
-
-    elif level == "tax_system":
-        await in_person_courses(update, context)
-
-    elif level == "power_query":
+    elif level in ["tax_system", "power_query"]:
         await in_person_courses(update, context)
 
     elif level == "power_query_link":
         await power_query(update, context)
 
-    elif level == "instagram":
-        await contact(update, context)
-
-    elif level == "telegram":
-        await contact(update, context)
-
-    elif level == "rubika":
+    elif level in ["instagram", "telegram", "rubika"]:
         await contact(update, context)
 
     elif level == "excel_beginner":
@@ -630,7 +685,7 @@ async def back(
 
 
 # =========================================================
-# مدیریت لینک دانلود
+# لینک‌های دانلود
 # =========================================================
 
 async def download_links(
@@ -648,23 +703,26 @@ async def download_links(
 
 
 # =========================================================
-# ساخت ربات
+# ساخت Application
 # =========================================================
 
 app = Application.builder().token(TOKEN).build()
 
 
 # =========================================================
-# دستور /start
+# /start
 # =========================================================
 
 app.add_handler(
-    CommandHandler("start", start)
+    CommandHandler(
+        "start",
+        start
+    )
 )
 
 
 # =========================================================
-# دستیار هوش مصنوعی
+# هوش مصنوعی
 # =========================================================
 
 app.add_handler(
@@ -799,7 +857,7 @@ app.add_handler(
 
 
 # =========================================================
-# لینک‌های دانلود
+# لینک دانلود
 # =========================================================
 
 app.add_handler(
@@ -835,41 +893,50 @@ app.add_handler(
 
 
 # =========================================================
-# پیام‌های متنی در حالت هوش مصنوعی
+# پیام‌های متنی AI
 # =========================================================
+
+MENU_BUTTONS = [
+    "🤖 دستیار هوش مصنوعی",
+    "🔙 خروج از هوش مصنوعی",
+    "🎓 دوره‌های آموزشی",
+    "🎬 ویدئوهای آموزشی",
+    "📱 ارتباط با ما",
+    "🏫 دوره‌های آموزشی حضوری",
+    "💻 دوره‌های آموزشی آنلاین",
+    "📊 دوره آموزش پاور کوئری",
+    "📑 دوره سامانه مودیان",
+    "📊 مشاهده و ثبت‌نام دوره",
+    "📸 اینستاگرام",
+    "📢 کانال تلگرام",
+    "🟠 کانال روبیکا",
+    "📗 ویدئوهای آموزشی مقدماتی اکسل",
+    "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل",
+    "📥 لینک‌های دانلود دوره",
+    "🔙 بازگشت",
+    "🏠 منوی اصلی"
+]
+
 
 app.add_handler(
     MessageHandler(
         filters.TEXT
         & ~filters.COMMAND
-        & ~filters.Text([
-            "🤖 دستیار هوش مصنوعی",
-            "🔙 خروج از هوش مصنوعی",
-            "🎓 دوره‌های آموزشی",
-            "🎬 ویدئوهای آموزشی",
-            "📱 ارتباط با ما",
-            "🏫 دوره‌های آموزشی حضوری",
-            "💻 دوره‌های آموزشی آنلاین",
-            "📊 دوره آموزش پاور کوئری",
-            "📑 دوره سامانه مودیان",
-            "📊 مشاهده و ثبت‌نام دوره",
-            "📸 اینستاگرام",
-            "📢 کانال تلگرام",
-            "🟠 کانال روبیکا",
-            "📗 ویدئوهای آموزشی مقدماتی اکسل",
-            "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل",
-            "📥 لینک‌های دانلود دوره",
-            "🔙 بازگشت",
-            "🏠 منوی اصلی"
-        ]),
+        & ~filters.Text(MENU_BUTTONS),
         ask_ai
     )
 )
 
 
 # =========================================================
-# اجرای Webhook
+# اجرای Webhook روی Render
 # =========================================================
+
+if not URL:
+    raise ValueError(
+        "RENDER_EXTERNAL_URL در Environment Variables تنظیم نشده است."
+    )
+
 
 app.run_webhook(
     listen="0.0.0.0",
@@ -877,4 +944,3 @@ app.run_webhook(
     url_path="telegram",
     webhook_url=f"{URL}/telegram"
 )
-```
