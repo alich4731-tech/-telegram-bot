@@ -1,4 +1,6 @@
+```python
 import os
+from openai import OpenAI
 
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
@@ -17,6 +19,65 @@ from telegram.ext import (
 TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", "10000"))
 URL = os.getenv("RENDER_EXTERNAL_URL")
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+client = OpenAI(
+    api_key=OPENAI_API_KEY
+)
+
+
+# =========================================================
+# تنظیمات هوش مصنوعی
+# =========================================================
+
+AI_SYSTEM_PROMPT = """
+تو دستیار هوش مصنوعی یک ربات تلگرامی تخصصی در حوزه حسابداری هستی.
+
+وظیفه اصلی تو پاسخ‌گویی تخصصی، دقیق و قابل فهم به سوالات مرتبط با موارد زیر است:
+
+- حسابداری
+- حسابداری مالی
+- حسابداری صنعتی
+- حسابداری مدیریت
+- حسابرسی
+- مالیات
+- قوانین و مقررات مالیاتی ایران
+- سامانه مودیان
+- اظهارنامه مالیاتی
+- معاملات فصلی
+- ارزش افزوده
+- حقوق و دستمزد
+- ثبت‌های حسابداری
+- صورت‌های مالی
+- استانداردهای حسابداری
+- اکسل در حسابداری
+- Power Query در حسابداری
+- توابع Excel مورد استفاده در حسابداری
+- تحلیل اطلاعات مالی
+
+پاسخ‌ها باید به زبان فارسی باشند.
+
+پاسخ را تا حد امکان ساده، آموزشی و کاربردی ارائه کن؛
+به‌خصوص زمانی که کاربر سوال آموزشی می‌پرسد.
+
+اگر سوال مربوط به حسابداری است، در صورت نیاز:
+- مثال عددی بزن.
+- ثبت حسابداری را با بدهکار و بستانکار نمایش بده.
+- مراحل انجام کار را توضیح بده.
+- اصطلاحات تخصصی را ساده توضیح بده.
+
+اگر سوال درباره قوانین مالیاتی ایران است و از آخرین تغییرات قانونی مطمئن نیستی،
+با صراحت اعلام کن که ممکن است قانون یا بخشنامه تغییر کرده باشد و
+نباید پاسخ تو به‌عنوان مشاوره قطعی حقوقی یا مالیاتی تلقی شود.
+
+اگر سوال کاملاً خارج از حوزه حسابداری، مالی، مالیاتی، حسابرسی یا Excel/Power Query مرتبط با حسابداری بود،
+پاسخ نده و فقط بگو:
+
+«من در این ربات برای پاسخ‌گویی در زمینه حسابداری، مالی، مالیاتی، حسابرسی و Excel/Power Query مرتبط با حسابداری طراحی شده‌ام.»
+
+از پاسخ دادن به موضوعات نامرتبط خودداری کن.
+"""
 
 
 # =========================================================
@@ -406,72 +467,43 @@ async def back(
 
     level = context.user_data.get("menu_level")
 
-    # -----------------------------------------------------
-    # دوره‌های آموزشی
-    # -----------------------------------------------------
-
     if level == "in_person_courses":
-
         await courses(update, context)
 
     elif level == "online_courses":
-
         await courses(update, context)
 
     elif level == "tax_system":
-
         await in_person_courses(update, context)
 
     elif level == "power_query":
-
         await in_person_courses(update, context)
 
     elif level == "power_query_link":
-
         await power_query(update, context)
 
-    # -----------------------------------------------------
-    # ارتباط با ما
-    # -----------------------------------------------------
-
     elif level == "instagram":
-
         await contact(update, context)
 
     elif level == "telegram":
-
         await contact(update, context)
 
     elif level == "rubika":
-
         await contact(update, context)
 
-    # -----------------------------------------------------
-    # ویدئوهای آموزشی
-    # -----------------------------------------------------
-
     elif level == "excel_beginner":
-
         await educational_videos(update, context)
 
     elif level == "excel_beginner_download":
-
         await excel_beginner(update, context)
 
     elif level == "excel_intermediate":
-
         await educational_videos(update, context)
 
     elif level == "excel_intermediate_download":
-
         await excel_intermediate(update, context)
 
-    # -----------------------------------------------------
-    # حالت پیش‌فرض
-    # -----------------------------------------------------
-
     else:
-
         await start(update, context)
 
 
@@ -499,12 +531,75 @@ async def download_links(
     level = context.user_data.get("menu_level")
 
     if level == "excel_beginner":
-
         await excel_beginner_download(update, context)
 
     elif level == "excel_intermediate":
-
         await excel_intermediate_download(update, context)
+
+
+# =========================================================
+# هوش مصنوعی
+# =========================================================
+
+async def ask_ai(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    user_question = update.message.text.strip()
+
+    if not user_question:
+        return
+
+    # -----------------------------------------------------
+    # بررسی وجود API Key
+    # -----------------------------------------------------
+
+    if not OPENAI_API_KEY:
+
+        await update.message.reply_text(
+            "⚠️ کلید اتصال به هوش مصنوعی در ربات تنظیم نشده است."
+        )
+
+        return
+
+    # -----------------------------------------------------
+    # نمایش وضعیت پردازش
+    # -----------------------------------------------------
+
+    thinking_message = await update.message.reply_text(
+        "🤖 در حال بررسی سوال شما..."
+    )
+
+    try:
+
+        response = client.responses.create(
+            model="gpt-5-mini",
+            instructions=AI_SYSTEM_PROMPT,
+            input=user_question
+        )
+
+        answer = response.output_text
+
+        if not answer:
+
+            answer = (
+                "متأسفانه در حال حاضر نتوانستم پاسخ مناسبی "
+                "برای سوال شما تولید کنم."
+            )
+
+        await thinking_message.edit_text(
+            answer
+        )
+
+    except Exception as e:
+
+        print("OPENAI ERROR:", e)
+
+        await thinking_message.edit_text(
+            "⚠️ در ارتباط با هوش مصنوعی مشکلی پیش آمد.\n\n"
+            "لطفاً چند لحظه بعد دوباره تلاش کنید."
+        )
 
 
 # =========================================================
@@ -676,6 +771,18 @@ app.add_handler(
 
 
 # =========================================================
+# پیام‌های متنی → هوش مصنوعی
+# =========================================================
+
+app.add_handler(
+    MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        ask_ai
+    )
+)
+
+
+# =========================================================
 # اجرای Webhook
 # =========================================================
 
@@ -685,3 +792,4 @@ app.run_webhook(
     url_path="telegram",
     webhook_url=f"{URL}/telegram"
 )
+```
