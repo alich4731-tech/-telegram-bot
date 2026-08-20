@@ -1,4 +1,5 @@
 import os
+import re
 
 from openai import OpenAI
 
@@ -29,7 +30,7 @@ URL = os.getenv("RENDER_EXTERNAL_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 AI_MODEL = os.getenv("AI_MODEL", "gpt-5.6-luna")
-AI_MAX_OUTPUT_TOKENS = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "500"))
+AI_MAX_OUTPUT_TOKENS = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "1200"))
 AI_HISTORY_MESSAGES = int(os.getenv("AI_HISTORY_MESSAGES", "4"))
 AI_HISTORY_CHAR_LIMIT = int(os.getenv("AI_HISTORY_CHAR_LIMIT", "1200"))
 
@@ -67,9 +68,14 @@ AI_SYSTEM_PROMPT = """
 فقط به موضوعات مرتبط با حسابداری و مالی، حسابرسی، مالیات، اکسل و Power Query مرتبط با حسابداری پاسخ بده.
 
 قواعد:
+
 - فارسی، دقیق، حرفه‌ای و مستقیم بنویس.
-- در هر پاسخ حتماً بین ۱ تا ۳ ایموجی مرتبط و طبیعی استفاده کن.
-- از استفاده بیش از ۳ ایموجی در یک پاسخ خودداری کن.
+- در هر پاسخ بین ۱ تا ۳ ایموجی مرتبط و طبیعی استفاده کن.
+- از ایموجی‌های مرتبط با موضوع استفاده کن، مانند 📌 🧾 💰 📊 🔍.
+- بیشتر از ۳ ایموجی در کل پاسخ استفاده نکن.
+- از ستاره‌های Markdown مانند ** و * برای برجسته‌سازی استفاده نکن.
+- به جای برجسته‌سازی با ستاره، در صورت نیاز از یک ایموجی مناسب مانند 📌 استفاده کن.
+- پاسخ را کامل ارائه کن و جمله یا بخش مهمی را نیمه‌کاره رها نکن.
 - اول منظور سؤال را تشخیص بده و به عبارت کلیدی و زمینه توجه کن.
 - فقط همان چیزی را پاسخ بده که کاربر خواسته است؛ اطلاعات جانبی اضافه نکن.
 - سؤال ساده: پاسخ کوتاه و مستقیم.
@@ -84,6 +90,104 @@ AI_SYSTEM_PROMPT = """
 - برای سؤال کاملاً خارج از حوزه، فقط بگو:
 «این دستیار برای پاسخ‌گویی به پرسش‌های حسابداری، مالی، حسابرسی، مالیات و اکسل/Power Query مرتبط با حسابداری طراحی شده است.»
 """
+
+
+# =========================================================
+# پاک‌سازی و کنترل ایموجی پاسخ AI
+# =========================================================
+
+def clean_ai_answer(answer):
+
+    if not answer:
+        return answer
+
+    # -----------------------------------------------------
+    # تبدیل Boldهای Markdown به حالت بدون ستاره
+    # مثال:
+    # **ماده ۲** قانون
+    #
+    # تبدیل می‌شود به:
+    # 📌 ماده ۲ قانون
+    # -----------------------------------------------------
+
+    bold_pattern = r"\*\*(.*?)\*\*"
+
+    bold_matches = re.findall(
+        bold_pattern,
+        answer,
+        flags=re.DOTALL
+    )
+
+    for index, match in enumerate(bold_matches):
+
+        if index < 3:
+            replacement = f"📌 {match}"
+        else:
+            replacement = match
+
+        answer = answer.replace(
+            f"**{match}**",
+            replacement,
+            1
+        )
+
+    # -----------------------------------------------------
+    # حذف ستاره‌های تکی Markdown
+    # -----------------------------------------------------
+
+    answer = answer.replace("*", "")
+
+    # -----------------------------------------------------
+    # حذف ایموجی‌های اضافه
+    # حداکثر ۳ ایموجی در پاسخ
+    # -----------------------------------------------------
+
+    emoji_pattern = (
+        r"[\U0001F300-\U0001FAFF]"
+        r"|[\U00002700-\U000027BF]"
+        r"|[\U0001F1E6-\U0001F1FF]"
+    )
+
+    emojis = re.findall(
+        emoji_pattern,
+        answer
+    )
+
+    if len(emojis) > 3:
+
+        count = 0
+
+        def keep_first_three(match):
+
+            nonlocal count
+
+            if count < 3:
+                count += 1
+                return match.group(0)
+
+            return ""
+
+        answer = re.sub(
+            emoji_pattern,
+            keep_first_three,
+            answer
+        )
+
+    # -----------------------------------------------------
+    # اگر هیچ ایموجی وجود نداشت،
+    # یک ایموجی مرتبط به ابتدای پاسخ اضافه می‌کنیم.
+    # -----------------------------------------------------
+
+    emojis_after_clean = re.findall(
+        emoji_pattern,
+        answer
+    )
+
+    if len(emojis_after_clean) == 0:
+
+        answer = "📌 " + answer
+
+    return answer.strip()
 
 
 # =========================================================
@@ -154,10 +258,6 @@ async def ai_assistant(
 
 
 # =========================================================
-# خروج از هوش مصنوعی
-# =========================================================
-
-# =========================================================
 # سوال از هوش مصنوعی
 # =========================================================
 
@@ -165,7 +265,6 @@ async def ask_ai(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    """ارسال سؤال به OpenAI با پاسخ کوتاه و تاریخچه محدود."""
 
     if not context.user_data.get("ai_mode", False):
         return
@@ -185,14 +284,18 @@ async def ask_ai(
         )
         return
 
-    # فقط چند پیام اخیر برای دنبال کردن سؤال‌های وابسته.
-    # این کار از ارسال کل مکالمه و افزایش بی‌دلیل مصرف توکن جلوگیری می‌کند.
-    history = context.user_data.setdefault("ai_history", [])
+    # تاریخچه محدود
+    history = context.user_data.setdefault(
+        "ai_history",
+        []
+    )
+
     recent_history = history[-AI_HISTORY_MESSAGES:]
 
     input_parts = []
 
     for item in recent_history:
+
         input_parts.append({
             "role": item["role"],
             "content": item["content"]
@@ -208,6 +311,7 @@ async def ask_ai(
     )
 
     try:
+
         response = client.responses.create(
             model=AI_MODEL,
             instructions=AI_SYSTEM_PROMPT,
@@ -215,12 +319,26 @@ async def ask_ai(
             max_output_tokens=AI_MAX_OUTPUT_TOKENS
         )
 
-        answer = (response.output_text or "").strip()
+        answer = (
+            response.output_text or ""
+        ).strip()
 
         if not answer:
-            answer = "⚠️ پاسخی از سرویس هوش مصنوعی دریافت نشد."
 
-        # ذخیره تاریخچه با سقف طول
+            answer = (
+                "⚠️ پاسخی از سرویس هوش مصنوعی دریافت نشد."
+            )
+
+        # -------------------------------------------------
+        # پاک‌سازی پاسخ و کنترل ایموجی
+        # -------------------------------------------------
+
+        answer = clean_ai_answer(answer)
+
+        # -------------------------------------------------
+        # ذخیره تاریخچه
+        # -------------------------------------------------
+
         history.append({
             "role": "user",
             "content": user_question[:AI_HISTORY_CHAR_LIMIT]
@@ -233,24 +351,41 @@ async def ask_ai(
 
         del history[:-AI_HISTORY_MESSAGES]
 
-        # تقسیم پیام‌های طولانی برای محدودیت تلگرام
+        # -------------------------------------------------
+        # تقسیم پیام‌های طولانی
+        # -------------------------------------------------
+
         max_length = 4000
 
         if len(answer) <= max_length:
-            await thinking_message.edit_text(answer)
+
+            await thinking_message.edit_text(
+                answer
+            )
 
         else:
-            await thinking_message.edit_text(answer[:max_length])
+
+            await thinking_message.edit_text(
+                answer[:max_length]
+            )
 
             remaining_text = answer[max_length:]
 
             while remaining_text:
+
                 chunk = remaining_text[:max_length]
-                await update.message.reply_text(chunk)
+
+                await update.message.reply_text(
+                    chunk
+                )
+
                 remaining_text = remaining_text[max_length:]
 
     except Exception as e:
-        print(f"OPENAI ERROR [{type(e).__name__}]: {e}")
+
+        print(
+            f"OPENAI ERROR [{type(e).__name__}]: {e}"
+        )
 
         await thinking_message.edit_text(
             "⚠️ در پردازش سؤال مشکلی ایجاد شد.\n"
@@ -462,7 +597,7 @@ async def telegram_channel(
 
     await update.message.reply_text(
         "📢 کانال تلگرام:\n\n"
-        "https://t.me/Alichavavoshiaccounting",
+        "https://t.me/Alichavoshiaccounting",
         reply_markup=create_keyboard(keyboard)
     )
 
@@ -594,80 +729,101 @@ async def excel_intermediate_download(
 
     context.user_data["menu_level"] = "excel_intermediate_download"
 
-    # دکمه‌های لینک مستقیم هر قسمت
+    # -----------------------------------------------------
+    # دکمه‌های Inline مربوط به ۹ قسمت
+    # -----------------------------------------------------
+
     keyboard = [
 
         [
             InlineKeyboardButton(
-                "قسمت اول - کلیپ آموزشی تابع Concatenate در اکسل",
+                "قسمت اول - تابع Concatenate در اکسل",
                 url="https://my.uupload.ir/p/0jka5XvR"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "قسمت دوم - کلیپ آموزشی تابع Textjoin در نرم افزار اکسل",
+                "قسمت دوم - تابع Textjoin در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/2KDmGQDB"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "قسمت سوم - کلیپ آموزشی تابع If و ترکیب آن با تابع Textjoin در نرم افزار اکسل",
+                "قسمت سوم - تابع If و ترکیب آن با تابع Textjoin",
                 url="https://my.uupload.ir/p/n2JGpEwK"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "قسمت چهارم - کلیپ آموزشی تابع And و ترکیب آن با تابع If در نرم افزار اکسل",
+                "قسمت چهارم - تابع And و ترکیب آن با تابع If",
                 url="https://my.uupload.ir/p/BvxABejW"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "قسمت پنجم - کلیپ آموزشی تابع Or و ترکیب آن با تابع If در نرم افزار اکسل",
+                "قسمت پنجم - تابع Or و ترکیب آن با تابع If",
                 url="https://my.uupload.ir/p/JgwO5yWN"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "قسمت ششم - کلیپ آموزشی تابع Xlookup در نرم افزار اکسل",
+                "قسمت ششم - تابع Xlookup در اکسل",
                 url="https://my.uupload.ir/p/ODwN9w42"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "قسمت هفتم - کلیپ آموزشی تابع Sumifs در نرم افزار اکسل",
+                "قسمت هفتم - تابع Sumifs در اکسل",
                 url="https://my.uupload.ir/p/1LdxaM00"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "قسمت هشتم - کلیپ آموزشی تابع Vlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
+                "قسمت هشتم - تابع Vlookup و تفاوت آن با Xlookup",
                 url="https://my.uupload.ir/p/aG5a79xw"
             )
         ],
 
         [
             InlineKeyboardButton(
-                "قسمت نهم (قسمت آخر) - کلیپ آموزشی تابع Hlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
+                "قسمت نهم (قسمت آخر) - تابع Hlookup و تفاوت آن با Xlookup",
                 url="https://my.uupload.ir/p/eyJLaKYX"
             )
         ]
 
     ]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = InlineKeyboardMarkup(
+        keyboard
+    )
+
+    # -----------------------------------------------------
+    # نکته مهم:
+    # اینجا ReplyKeyboardMarkup را هم مشخص می‌کنیم
+    # تا دکمه بازگشت همین صفحه مستقیماً به
+    # educational_videos برگردد.
+    # -----------------------------------------------------
+
+    reply_keyboard = [
+        ["🔙 بازگشت", "🏠 منوی اصلی"]
+    ]
 
     await update.message.reply_text(
         "📘 لینک دانلود ویدئوهای آموزشی نیمه پیشرفته اکسل:\n\n"
         "قسمت مورد نظر خود را انتخاب کنید:",
         reply_markup=reply_markup
+    )
+
+    await update.message.reply_text(
+        "🔙 بازگشت به لیست ویدئوها:",
+        reply_markup=create_keyboard(reply_keyboard)
     )
 
 
@@ -703,8 +859,14 @@ async def back(
     elif level == "excel_intermediate":
         await educational_videos(update, context)
 
+    # -----------------------------------------------------
+    # اصلاح مهم:
+    # از صفحه لینک‌های نیمه پیشرفته مستقیماً
+    # به صفحه ویدئوهای آموزشی برمی‌گردد.
+    # -----------------------------------------------------
+
     elif level == "excel_intermediate_download":
-        await excel_intermediate(update, context)
+        await educational_videos(update, context)
 
     else:
         await start(update, context)
@@ -722,10 +884,18 @@ async def download_links(
     level = context.user_data.get("menu_level")
 
     if level == "excel_beginner":
-        await excel_beginner_download(update, context)
+
+        await excel_beginner_download(
+            update,
+            context
+        )
 
     elif level == "excel_intermediate":
-        await excel_intermediate_download(update, context)
+
+        await excel_intermediate_download(
+            update,
+            context
+        )
 
 
 # =========================================================
