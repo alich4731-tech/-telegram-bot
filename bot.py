@@ -2,7 +2,13 @@ import os
 
 from openai import OpenAI
 
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -62,6 +68,8 @@ AI_SYSTEM_PROMPT = """
 
 قواعد:
 - فارسی، دقیق، حرفه‌ای و مستقیم بنویس.
+- در هر پاسخ حتماً بین ۱ تا ۳ ایموجی مرتبط و طبیعی استفاده کن.
+- از استفاده بیش از ۳ ایموجی در یک پاسخ خودداری کن.
 - اول منظور سؤال را تشخیص بده و به عبارت کلیدی و زمینه توجه کن.
 - فقط همان چیزی را پاسخ بده که کاربر خواسته است؛ اطلاعات جانبی اضافه نکن.
 - سؤال ساده: پاسخ کوتاه و مستقیم.
@@ -144,6 +152,7 @@ async def ai_assistant(
         reply_markup=create_keyboard(keyboard)
     )
 
+
 # =========================================================
 # خروج از هوش مصنوعی
 # =========================================================
@@ -182,6 +191,7 @@ async def ask_ai(
     recent_history = history[-AI_HISTORY_MESSAGES:]
 
     input_parts = []
+
     for item in recent_history:
         input_parts.append({
             "role": item["role"],
@@ -215,10 +225,12 @@ async def ask_ai(
             "role": "user",
             "content": user_question[:AI_HISTORY_CHAR_LIMIT]
         })
+
         history.append({
             "role": "assistant",
             "content": answer[:AI_HISTORY_CHAR_LIMIT]
         })
+
         del history[:-AI_HISTORY_MESSAGES]
 
         # تقسیم پیام‌های طولانی برای محدودیت تلگرام
@@ -226,6 +238,7 @@ async def ask_ai(
 
         if len(answer) <= max_length:
             await thinking_message.edit_text(answer)
+
         else:
             await thinking_message.edit_text(answer[:max_length])
 
@@ -449,7 +462,7 @@ async def telegram_channel(
 
     await update.message.reply_text(
         "📢 کانال تلگرام:\n\n"
-        "https://t.me/Alichavoshiaccounting",
+        "https://t.me/Alichavavoshiaccounting",
         reply_markup=create_keyboard(keyboard)
     )
 
@@ -581,14 +594,80 @@ async def excel_intermediate_download(
 
     context.user_data["menu_level"] = "excel_intermediate_download"
 
+    # دکمه‌های لینک مستقیم هر قسمت
     keyboard = [
-        ["🔙 بازگشت", "🏠 منوی اصلی"]
+
+        [
+            InlineKeyboardButton(
+                "قسمت اول - کلیپ آموزشی تابع Concatenate در اکسل",
+                url="https://my.uupload.ir/p/0jka5XvR"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "قسمت دوم - کلیپ آموزشی تابع Textjoin در نرم افزار اکسل",
+                url="https://my.uupload.ir/p/2KDmGQDB"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "قسمت سوم - کلیپ آموزشی تابع If و ترکیب آن با تابع Textjoin در نرم افزار اکسل",
+                url="https://my.uupload.ir/p/n2JGpEwK"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "قسمت چهارم - کلیپ آموزشی تابع And و ترکیب آن با تابع If در نرم افزار اکسل",
+                url="https://my.uupload.ir/p/BvxABejW"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "قسمت پنجم - کلیپ آموزشی تابع Or و ترکیب آن با تابع If در نرم افزار اکسل",
+                url="https://my.uupload.ir/p/JgwO5yWN"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "قسمت ششم - کلیپ آموزشی تابع Xlookup در نرم افزار اکسل",
+                url="https://my.uupload.ir/p/ODwN9w42"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "قسمت هفتم - کلیپ آموزشی تابع Sumifs در نرم افزار اکسل",
+                url="https://my.uupload.ir/p/1LdxaM00"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "قسمت هشتم - کلیپ آموزشی تابع Vlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
+                url="https://my.uupload.ir/p/aG5a79xw"
+            )
+        ],
+
+        [
+            InlineKeyboardButton(
+                "قسمت نهم (قسمت آخر) - کلیپ آموزشی تابع Hlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
+                url="https://my.uupload.ir/p/eyJLaKYX"
+            )
+        ]
+
     ]
 
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
-        "📥 لینک دانلود ویدئوهای آموزشی سطح نیمه پیشرفته:\n\n"
-        "https://my.uupload.ir/d/YL2XN",
-        reply_markup=create_keyboard(keyboard)
+        "📘 لینک دانلود ویدئوهای آموزشی نیمه پیشرفته اکسل:\n\n"
+        "قسمت مورد نظر خود را انتخاب کنید:",
+        reply_markup=reply_markup
     )
 
 
@@ -678,6 +757,7 @@ app.add_handler(
         ai_assistant
     )
 )
+
 
 # =========================================================
 # منوی اصلی
