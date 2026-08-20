@@ -26,7 +26,16 @@ URL = os.getenv("RENDER_EXTERNAL_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 AI_MODEL = os.getenv("AI_MODEL", "gpt-5.6-luna")
-AI_MAX_OUTPUT_TOKENS = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "700"))
+
+# نکته مهم: وقتی Web Search فعال است، بودجه max_output_tokens بین فراخوانی
+# ابزار جست‌وجو + خواندن نتایج + متن نهایی مشترک است. عدد قبلی (700) خیلی کم
+# بود و باعث می‌شد پاسخ یا کاملاً خالی برگردد یا وسط جمله قطع شود. بنابراین
+# برای حالت عادی و حالت «قانونی/جست‌وجوی وب» دو بودجه جدا در نظر گرفته شده و
+# یک سقف بالا هم برای تلاش دوم (Retry) تعریف شده است.
+AI_MAX_OUTPUT_TOKENS = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "2200"))
+AI_MAX_OUTPUT_TOKENS_LEGAL = int(os.getenv("AI_MAX_OUTPUT_TOKENS_LEGAL", "3200"))
+AI_MAX_OUTPUT_TOKENS_HARD_CAP = int(os.getenv("AI_MAX_OUTPUT_TOKENS_HARD_CAP", "4000"))
+
 AI_HISTORY_MESSAGES = int(os.getenv("AI_HISTORY_MESSAGES", "4"))
 AI_HISTORY_CHAR_LIMIT = int(os.getenv("AI_HISTORY_CHAR_LIMIT", "1200"))
 AI_IMAGE_MAX_BYTES = int(os.getenv("AI_IMAGE_MAX_BYTES", "10000000"))
@@ -276,6 +285,35 @@ def _is_legal_question(text: str) -> bool:
     return any(k in normalized for k in keywords)
 
 
+def _extract_output_text(response) -> str:
+    """
+    استخراج مطمئن متن پاسخ.
+
+    گاهی وقتی بودجه max_output_tokens قبل از تولید متن نهایی تمام می‌شود یا
+    مدل فقط ابزار (web_search) را صدا می‌زند و هنوز به بلوک متن نرسیده،
+    response.output_text کاملاً خالی برمی‌گردد در حالی که ممکن است بخشی از
+    متن در بلوک‌های output موجود باشد. این تابع آن را نیز به‌عنوان جایگزین
+    بازیابی می‌کند تا کاربر پیام «پاسخی دریافت نشد» را بدون دلیل نبیند.
+    """
+    text = (getattr(response, "output_text", None) or "").strip()
+    if text:
+        return text
+
+    collected = []
+    try:
+        for item in getattr(response, "output", []) or []:
+            if getattr(item, "type", None) != "message":
+                continue
+            for content in getattr(item, "content", []) or []:
+                content_text = getattr(content, "text", None)
+                if content_text:
+                    collected.append(content_text)
+    except Exception as e:
+        print(f"OUTPUT TEXT EXTRACTION WARNING: {e}")
+
+    return "".join(collected).strip()
+
+
 def _collect_source_urls(response):
     """استخراج لینک‌های رسمی از citationهای Web Search بدون نمایش URL خام."""
     citations = []
@@ -408,45 +446,85 @@ async def _request_ai(input_parts, question_for_history, context, image_mode=Fal
     })
 
     legal = _is_legal_question(question_for_history)
+    base_tokens = AI_MAX_OUTPUT_TOKENS_LEGAL if legal else AI_MAX_OUTPUT_TOKENS
 
-    request_args = {
-        "model": AI_MODEL,
-        "instructions": AI_SYSTEM_PROMPT,
-        "input": combined_input,
-        "max_output_tokens": AI_MAX_OUTPUT_TOKENS,
-    }
+    def build_request(max_tokens, with_tools):
+        args = {
+            "model": AI_MODEL,
+            "instructions": AI_SYSTEM_PROMPT,
+            "input": combined_input,
+            "max_output_tokens": max_tokens,
+        }
 
-    # جست‌وجوی وب فقط برای موضوعات قانونی/به‌روز فعال می‌شود تا هزینه و زمان
-    # پرسش‌های عادی بی‌دلیل افزایش پیدا نکند.
-    if legal:
-        request_args["tools"] = [{
-            "type": "web_search",
-            "search_context_size": AI_WEB_SEARCH_CONTEXT,
-            "filters": {
-                "allowed_domains": [
-                    "regulation.tax.gov.ir",
-                    "qavanin.ir",
-                    "dotic.ir",
-                    "rrk.ir",
-                    "adliran.ir",
-                    "divan-edalat.ir",
-                    "tamin.ir",
-                    "tax.gov.ir",
-                    "intamedia.ir",
-                    "mefa.ir",
-                    "acco.ir",
-                    "majlis.ir",
-                    "dolat.ir",
-                    "irancode.ir"
-                ]
-            }
-        }]
+        # جست‌وجوی وب فقط برای موضوعات قانونی/به‌روز فعال می‌شود تا هزینه و
+        # زمان پرسش‌های عادی بی‌دلیل افزایش پیدا نکند.
+        if with_tools and legal:
+            args["tools"] = [{
+                "type": "web_search",
+                "search_context_size": AI_WEB_SEARCH_CONTEXT,
+                "filters": {
+                    "allowed_domains": [
+                        "regulation.tax.gov.ir",
+                        "qavanin.ir",
+                        "dotic.ir",
+                        "rrk.ir",
+                        "adliran.ir",
+                        "divan-edalat.ir",
+                        "tamin.ir",
+                        "tax.gov.ir",
+                        "intamedia.ir",
+                        "mefa.ir",
+                        "acco.ir",
+                        "majlis.ir",
+                        "dolat.ir",
+                        "irancode.ir"
+                    ]
+                }
+            }]
+        return args
 
-    response = client.responses.create(**request_args)
-    answer = (response.output_text or "").strip()
+    response = client.responses.create(**build_request(base_tokens, with_tools=True))
+    answer = _extract_output_text(response)
+
+    status = getattr(response, "status", None)
+    incomplete_details = getattr(response, "incomplete_details", None)
+    incomplete_reason = getattr(incomplete_details, "reason", None) if incomplete_details else None
+
+    # اگر پاسخ به دلیل تمام‌شدن بودجه max_output_tokens ناقص/خالی برگشت (دقیقاً
+    # همان مشکلی که باعث می‌شد یا هیچ متنی برنگردد یا پاسخ وسط جمله قطع شود)،
+    # یک بار دیگر با بودجه بزرگ‌تر و بدون Web Search تلاش می‌کنیم تا کل بودجه
+    # صرف نوشتن متن نهایی شود.
+    needs_retry = (
+        not answer
+        or (status == "incomplete" and incomplete_reason == "max_output_tokens")
+    )
+
+    if needs_retry:
+        retry_tokens = min(AI_MAX_OUTPUT_TOKENS_HARD_CAP, base_tokens * 2)
+        print(
+            f"AI RETRY TRIGGERED: status={status}, "
+            f"incomplete_reason={incomplete_reason}, empty={not answer}, "
+            f"retry_tokens={retry_tokens}"
+        )
+        try:
+            retry_response = client.responses.create(
+                **build_request(retry_tokens, with_tools=False)
+            )
+            retry_answer = _extract_output_text(retry_response)
+            if retry_answer:
+                response = retry_response
+                answer = retry_answer
+        except Exception as retry_error:
+            print(f"OPENAI RETRY ERROR [{type(retry_error).__name__}]: {retry_error}")
 
     if not answer:
-        answer = "⚠️ پاسخی از سرویس هوش مصنوعی دریافت نشد."
+        # این پیام fallback عمداً در تاریخچه ذخیره نمی‌شود، تا مکالمات بعدی با
+        # یک «پاسخ» بی‌معنی آلوده نشوند.
+        return (
+            "⚠️ پاسخی از سرویس هوش مصنوعی دریافت نشد. لطفاً سؤال را کمی "
+            "کوتاه‌تر/ساده‌تر مطرح کنید یا دوباره تلاش کنید.",
+            []
+        )
 
     history.append({
         "role": "user",
