@@ -27,14 +27,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 AI_MODEL = os.getenv("AI_MODEL", "gpt-5.6-luna")
 
-# نکته مهم: وقتی Web Search فعال است، بودجه max_output_tokens بین فراخوانی
-# ابزار جست‌وجو + خواندن نتایج + متن نهایی مشترک است. عدد قبلی (700) خیلی کم
-# بود و باعث می‌شد پاسخ یا کاملاً خالی برگردد یا وسط جمله قطع شود. بنابراین
-# برای حالت عادی و حالت «قانونی/جست‌وجوی وب» دو بودجه جدا در نظر گرفته شده و
-# یک سقف بالا هم برای تلاش دوم (Retry) تعریف شده است.
+# بودجه max_output_tokens بین فراخوانی ابزار جست‌وجو + خواندن نتایج + متن
+# نهایی مشترک است؛ برای سؤالات قانونی/مالیاتی که Web Search اجباری می‌شود
+# بودجه بیشتری لازم است.
 AI_MAX_OUTPUT_TOKENS = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "2200"))
-AI_MAX_OUTPUT_TOKENS_LEGAL = int(os.getenv("AI_MAX_OUTPUT_TOKENS_LEGAL", "3200"))
-AI_MAX_OUTPUT_TOKENS_HARD_CAP = int(os.getenv("AI_MAX_OUTPUT_TOKENS_HARD_CAP", "4000"))
+AI_MAX_OUTPUT_TOKENS_LEGAL = int(os.getenv("AI_MAX_OUTPUT_TOKENS_LEGAL", "3600"))
+AI_MAX_OUTPUT_TOKENS_HARD_CAP = int(os.getenv("AI_MAX_OUTPUT_TOKENS_HARD_CAP", "5200"))
 
 AI_HISTORY_MESSAGES = int(os.getenv("AI_HISTORY_MESSAGES", "4"))
 AI_HISTORY_CHAR_LIMIT = int(os.getenv("AI_HISTORY_CHAR_LIMIT", "1200"))
@@ -121,8 +119,11 @@ AI_SYSTEM_PROMPT = """
 قوانین، بخشنامه‌ها و مقررات ایران
 =========================================================
 هرگاه سؤال درباره قانون، ماده، تبصره، بند، بخشنامه، دستورالعمل، آیین‌نامه، رأی،
-سامانه مؤدیان، مالیات، ارزش افزوده، تأمین اجتماعی یا هر مقرره جاری باشد، باید
-Web Search را استفاده کنی و پاسخ را صرفاً بر اساس حافظه مدل ارائه ندهی.
+سامانه مؤدیان، مالیات، ارزش افزوده، تأمین اجتماعی، بودجه سالانه یا هر مقرره
+جاری باشد، باید Web Search را استفاده کنی و پاسخ را صرفاً بر اساس حافظه مدل
+ارائه ندهی — این موضوع شامل سؤالات ادامه‌دار در همان مکالمه هم می‌شود (مثلاً
+وقتی کاربر فقط می‌گوید «عددش رو بگو» یا «دقیق‌ترش کن»)؛ در این حالت‌ها هم باید
+دوباره جست‌وجوی وب انجام شود و صرفاً به پاسخ قبلی یا حافظه اکتفا نشود.
 
 برای پژوهش قانونی، منابع رسمی ایران را در اولویت مطلق قرار بده؛ از جمله:
 • regulation.tax.gov.ir
@@ -146,6 +147,20 @@ Web Search را استفاده کنی و پاسخ را صرفاً بر اساس 
 «ماده ۶ قانون پایانه‌های فروشگاهی و سامانه مؤدیان».
 لینک خام را در متن ننویس؛ لینک باید از طریق یک آیکن قابل کلیک در خود متن ارائه شود.
 برای هر منبع معمولاً یک آیکن کافی است و از فهرست طولانی منابع خودداری کن.
+
+=========================================================
+دقت در رقم‌ها و ارقام قانونی (بسیار مهم)
+=========================================================
+هرگز رقم، درصد، سقف معافیت، مبلغ، مهلت یا هر عدد قانونی/مالیاتی را از حافظه
+یا حدس نگو و با اطمینان کاذب اعلام نکن. این ارقام فقط باید بر پایه نتیجه واقعی
+Web Search در همان درخواست بیان شوند.
+اگر جست‌وجو نتیجه قطعی، به‌روز و از منبع رسمی نداد یا بین منابع تعارض بود،
+صریحاً بگو که رقم دقیق و قطعی در حال حاضر از منبع رسمی به‌دست نیامد یا هنوز
+ابلاغ نشده است؛ به‌جای حدس زدن، گرد کردن، یا تکرار ارقام سال‌های قبل به‌عنوان
+رقم سال جاری.
+اگر رقمی را قبلاً در همین مکالمه اشتباه گفته‌ای و کاربر آن را اصلاح کرد، رقم
+اصلاح‌شده کاربر را به‌عنوان واقعیت قطعی فرض نکن؛ دوباره از منبع رسمی جست‌وجو و
+تأیید کن و در صورت تأیید، تصحیح را با ذکر منبع اعلام کن.
 
 =========================================================
 ایموجی
@@ -279,7 +294,8 @@ def _is_legal_question(text: str) -> bool:
         "آیین‌نامه", "رأی", "رای", "ابطال", "اصلاحیه", "اصلاح", "سامانه مؤدیان",
         "سامانه مودیان", "مالیات", "ارزش افزوده", "تأمین اجتماعی", "تامین اجتماعی",
         "حد مجاز", "عدول", "صورتحساب الکترونیکی", "معافیت", "جرائم", "جریمه",
-        "نرخ مالیات", "حق بیمه", "بیمه", "مصوبه", "تصویب نامه", "تصویب‌نامه"
+        "نرخ مالیات", "حق بیمه", "بیمه", "مصوبه", "تصویب نامه", "تصویب‌نامه",
+        "بودجه", "لایحه بودجه", "حداقل دستمزد", "حداقل حقوق"
     ]
     normalized = text.replace("ي", "ی").replace("ك", "ک")
     return any(k in normalized for k in keywords)
@@ -445,10 +461,28 @@ async def _request_ai(input_parts, question_for_history, context, image_mode=Fal
         "content": input_parts
     })
 
-    legal = _is_legal_question(question_for_history)
+    # طبقه‌بندی «سؤال قانونی» هم روی پیام فعلی و هم روی تاریخچه اخیر انجام
+    # می‌شود. سؤالات ادامه‌دار مثل «عددش رو بگو» یا «دقیق‌ترش کن» معمولاً
+    # کلمه کلیدی ندارند اما موضوع مکالمه کاملاً قانونی/مالیاتی است. بدون این
+    # بررسی، ابزار Web Search اصلاً فعال نمی‌شد و مدل رقم را از حافظه (و
+    # غالباً اشتباه) حدس می‌زد — دقیقاً همان چیزی که باعث رقم غلط شد.
+    history_text = " ".join(
+        item.get("content", "") for item in recent_history
+        if isinstance(item.get("content"), str)
+    )
+    legal_from_question = _is_legal_question(question_for_history)
+    legal_from_history = _is_legal_question(history_text)
+    legal = legal_from_question or legal_from_history
+
+    # اگر ادامه‌ی یک موضوع قانونی هستیم (یعنی ابهام اولیه احتمالاً قبلاً حل
+    # شده)، Web Search را اجباری می‌کنیم تا مدل به‌جای حدس زدن، حتماً جست‌وجو
+    # کند. در همان اولین پیام یک موضوع قانونی اجباری نمی‌کنیم، چون ممکن است
+    # مدل لازم باشد ابتدا سؤال روشن‌کننده بپرسد (بدون نیاز به جست‌وجو).
+    force_search = legal and legal_from_history
+
     base_tokens = AI_MAX_OUTPUT_TOKENS_LEGAL if legal else AI_MAX_OUTPUT_TOKENS
 
-    def build_request(max_tokens, with_tools):
+    def build_request(max_tokens, with_tools, force_tool=False):
         args = {
             "model": AI_MODEL,
             "instructions": AI_SYSTEM_PROMPT,
@@ -456,8 +490,6 @@ async def _request_ai(input_parts, question_for_history, context, image_mode=Fal
             "max_output_tokens": max_tokens,
         }
 
-        # جست‌وجوی وب فقط برای موضوعات قانونی/به‌روز فعال می‌شود تا هزینه و
-        # زمان پرسش‌های عادی بی‌دلیل افزایش پیدا نکند.
         if with_tools and legal:
             args["tools"] = [{
                 "type": "web_search",
@@ -481,49 +513,70 @@ async def _request_ai(input_parts, question_for_history, context, image_mode=Fal
                     ]
                 }
             }]
+            if force_tool:
+                args["tool_choice"] = "required"
         return args
 
-    response = client.responses.create(**build_request(base_tokens, with_tools=True))
-    answer = _extract_output_text(response)
+    # زنجیره تلاش: (1) حالت عادی، (2) همان تنظیمات با بودجه توکن بزرگ‌تر برای
+    # جلوگیری از قطع‌شدن پاسخ، (3) در صورت شکست کامل، بدون ابزار (فقط برای
+    # جلوگیری از سکوت کامل ربات) به همراه هشدار صریح به کاربر که این پاسخ
+    # تأییدشده با جست‌وجوی وب نیست.
+    attempts = [
+        {"tokens": base_tokens, "with_tools": True, "force_tool": force_search},
+        {"tokens": min(AI_MAX_OUTPUT_TOKENS_HARD_CAP, base_tokens * 2), "with_tools": True, "force_tool": force_search},
+        {"tokens": min(AI_MAX_OUTPUT_TOKENS_HARD_CAP, base_tokens * 2), "with_tools": False, "force_tool": False},
+    ]
 
-    status = getattr(response, "status", None)
-    incomplete_details = getattr(response, "incomplete_details", None)
-    incomplete_reason = getattr(incomplete_details, "reason", None) if incomplete_details else None
+    response = None
+    answer = ""
+    used_fallback_without_search = False
 
-    # اگر پاسخ به دلیل تمام‌شدن بودجه max_output_tokens ناقص/خالی برگشت (دقیقاً
-    # همان مشکلی که باعث می‌شد یا هیچ متنی برنگردد یا پاسخ وسط جمله قطع شود)،
-    # یک بار دیگر با بودجه بزرگ‌تر و بدون Web Search تلاش می‌کنیم تا کل بودجه
-    # صرف نوشتن متن نهایی شود.
-    needs_retry = (
-        not answer
-        or (status == "incomplete" and incomplete_reason == "max_output_tokens")
-    )
-
-    if needs_retry:
-        retry_tokens = min(AI_MAX_OUTPUT_TOKENS_HARD_CAP, base_tokens * 2)
-        print(
-            f"AI RETRY TRIGGERED: status={status}, "
-            f"incomplete_reason={incomplete_reason}, empty={not answer}, "
-            f"retry_tokens={retry_tokens}"
-        )
+    for index, attempt in enumerate(attempts):
         try:
-            retry_response = client.responses.create(
-                **build_request(retry_tokens, with_tools=False)
+            attempt_response = client.responses.create(
+                **build_request(attempt["tokens"], attempt["with_tools"], attempt["force_tool"])
             )
-            retry_answer = _extract_output_text(retry_response)
-            if retry_answer:
-                response = retry_response
-                answer = retry_answer
-        except Exception as retry_error:
-            print(f"OPENAI RETRY ERROR [{type(retry_error).__name__}]: {retry_error}")
+        except Exception as call_error:
+            print(f"OPENAI CALL ERROR (attempt {index + 1}) [{type(call_error).__name__}]: {call_error}")
+            continue
+
+        attempt_answer = _extract_output_text(attempt_response)
+        status = getattr(attempt_response, "status", None)
+        incomplete_details = getattr(attempt_response, "incomplete_details", None)
+        incomplete_reason = getattr(incomplete_details, "reason", None) if incomplete_details else None
+        cut_off = status == "incomplete" and incomplete_reason == "max_output_tokens"
+
+        # اگر همین الان یک پاسخ غیرخالی داریم ولی از قبل چیزی ذخیره نشده،
+        # آن را به‌عنوان ذخیره نگه دار تا اگر تلاش‌های بعدی هم شکست خوردند،
+        # لااقل همین باقی بماند.
+        if attempt_answer and not answer:
+            response = attempt_response
+            answer = attempt_answer
+            used_fallback_without_search = not attempt["with_tools"]
+
+        if attempt_answer and not cut_off:
+            # پاسخ کامل و غیرخالی گرفتیم؛ نیازی به تلاش بعدی نیست.
+            break
+
+        print(
+            f"AI ATTEMPT {index + 1} INSUFFICIENT: status={status}, "
+            f"incomplete_reason={incomplete_reason}, empty={not attempt_answer}"
+        )
 
     if not answer:
-        # این پیام fallback عمداً در تاریخچه ذخیره نمی‌شود، تا مکالمات بعدی با
+        # این پیام fallback عمداً در تاریخچه ذخیره نمی‌شود تا مکالمات بعدی با
         # یک «پاسخ» بی‌معنی آلوده نشوند.
         return (
             "⚠️ پاسخی از سرویس هوش مصنوعی دریافت نشد. لطفاً سؤال را کمی "
             "کوتاه‌تر/ساده‌تر مطرح کنید یا دوباره تلاش کنید.",
             []
+        )
+
+    if used_fallback_without_search and legal:
+        answer = (
+            "⚠️ این پاسخ بدون تأیید مستقیم از جست‌وجوی وب ارائه شده و ممکن "
+            "است دقیق نباشد؛ لطفاً رقم/حکم نهایی را از منبع رسمی مربوطه نیز "
+            "بررسی کنید.\n\n" + answer
         )
 
     history.append({
@@ -536,7 +589,7 @@ async def _request_ai(input_parts, question_for_history, context, image_mode=Fal
     })
     del history[:-AI_HISTORY_MESSAGES]
 
-    return answer, _collect_source_urls(response)
+    return answer, _collect_source_urls(response) if response is not None else []
 
 
 async def ask_ai(update: Update, context: ContextTypes.DEFAULT_TYPE):
