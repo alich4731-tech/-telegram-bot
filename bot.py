@@ -40,10 +40,14 @@ AI_HISTORY_CHAR_LIMIT = int(os.getenv("AI_HISTORY_CHAR_LIMIT", "1200"))
 # =========================================================
 
 if not TOKEN:
-    raise ValueError("BOT_TOKEN در Environment Variables تنظیم نشده است.")
+    raise ValueError(
+        "BOT_TOKEN در Environment Variables تنظیم نشده است."
+    )
 
 if not OPENAI_API_KEY:
-    print("WARNING: OPENAI_API_KEY تنظیم نشده است.")
+    print(
+        "WARNING: OPENAI_API_KEY تنظیم نشده است."
+    )
 
 
 # =========================================================
@@ -53,6 +57,7 @@ if not OPENAI_API_KEY:
 client = None
 
 if OPENAI_API_KEY:
+
     client = OpenAI(
         api_key=OPENAI_API_KEY
     )
@@ -70,11 +75,8 @@ AI_SYSTEM_PROMPT = """
 قواعد:
 
 - فارسی، دقیق، حرفه‌ای و مستقیم بنویس.
-- در هر پاسخ بین ۱ تا ۳ ایموجی مرتبط و طبیعی استفاده کن.
-- از ایموجی‌های مرتبط با موضوع استفاده کن، مانند 📌 🧾 💰 📊 🔍.
-- بیشتر از ۳ ایموجی در کل پاسخ استفاده نکن.
+- خودت هیچ ایموجی در پاسخ قرار نده؛ ایموجی‌ها بعداً توسط سیستم ربات و بر اساس موضوع پاسخ اضافه می‌شوند.
 - از ستاره‌های Markdown مانند ** و * برای برجسته‌سازی استفاده نکن.
-- به جای برجسته‌سازی با ستاره، در صورت نیاز از یک ایموجی مناسب مانند 📌 استفاده کن.
 - پاسخ را کامل ارائه کن و جمله یا بخش مهمی را نیمه‌کاره رها نکن.
 - اول منظور سؤال را تشخیص بده و به عبارت کلیدی و زمینه توجه کن.
 - فقط همان چیزی را پاسخ بده که کاربر خواسته است؛ اطلاعات جانبی اضافه نکن.
@@ -93,97 +95,330 @@ AI_SYSTEM_PROMPT = """
 
 
 # =========================================================
-# پاک‌سازی و کنترل ایموجی پاسخ AI
+# تنظیمات ایموجی
 # =========================================================
 
-def clean_ai_answer(answer):
+EMOJI_PATTERN = (
+    r"[\U0001F300-\U0001FAFF]"
+    r"|[\U00002700-\U000027BF]"
+    r"|[\U0001F1E6-\U0001F1FF]"
+)
+
+
+# =========================================================
+# انتخاب ایموجی متناسب با متن
+# =========================================================
+
+def get_emoji_for_text(text, used_emojis):
+
+    text_lower = text.lower()
+
+    # -----------------------------------------------------
+    # قوانین و مواد قانونی
+    # -----------------------------------------------------
+
+    if (
+        "ماده" in text_lower
+        or "قانون" in text_lower
+        or "تبصره" in text_lower
+        or "بند" in text_lower
+        or "بخشنامه" in text_lower
+        or "آیین نامه" in text_lower
+        or "مقررات" in text_lower
+    ):
+
+        candidates = [
+            "⚖️",
+            "📜",
+            "📌"
+        ]
+
+    # -----------------------------------------------------
+    # مالیات
+    # -----------------------------------------------------
+
+    elif (
+        "مالیات" in text_lower
+        or "مالیاتی" in text_lower
+        or "اظهارنامه" in text_lower
+        or "معافیت" in text_lower
+        or "مالیات مستقیم" in text_lower
+    ):
+
+        candidates = [
+            "💰",
+            "🧾",
+            "💵"
+        ]
+
+    # -----------------------------------------------------
+    # حسابداری
+    # -----------------------------------------------------
+
+    elif (
+        "حسابداری" in text_lower
+        or "ثبت حسابداری" in text_lower
+        or "بدهکار" in text_lower
+        or "بستانکار" in text_lower
+        or "سند حسابداری" in text_lower
+        or "دفتر کل" in text_lower
+    ):
+
+        candidates = [
+            "🧾",
+            "📒",
+            "💼"
+        ]
+
+    # -----------------------------------------------------
+    # حسابرسی
+    # -----------------------------------------------------
+
+    elif (
+        "حسابرسی" in text_lower
+        or "حسابرس" in text_lower
+        or "کنترل داخلی" in text_lower
+        or "رسیدگی" in text_lower
+    ):
+
+        candidates = [
+            "🔍",
+            "📋",
+            "✅"
+        ]
+
+    # -----------------------------------------------------
+    # اکسل و Power Query
+    # -----------------------------------------------------
+
+    elif (
+        "اکسل" in text_lower
+        or "excel" in text_lower
+        or "power query" in text_lower
+        or "پاور کوئری" in text_lower
+        or "فرمول" in text_lower
+        or "تابع" in text_lower
+    ):
+
+        candidates = [
+            "📊",
+            "🔢",
+            "💻"
+        ]
+
+    # -----------------------------------------------------
+    # سامانه مودیان
+    # -----------------------------------------------------
+
+    elif (
+        "سامانه مودیان" in text_lower
+        or "مودیان" in text_lower
+        or "صورتحساب الکترونیکی" in text_lower
+        or "صورتحساب" in text_lower
+    ):
+
+        candidates = [
+            "💻",
+            "🧾",
+            "📤"
+        ]
+
+    # -----------------------------------------------------
+    # تاریخ، روز و زمان
+    # -----------------------------------------------------
+
+    elif (
+        "روز" in text_lower
+        or "تاریخ" in text_lower
+        or "ماه" in text_lower
+        or "سال" in text_lower
+        or "روز کاری" in text_lower
+        or "تعطیلات" in text_lower
+    ):
+
+        candidates = [
+            "📅",
+            "⏱️",
+            "🗓️"
+        ]
+
+    # -----------------------------------------------------
+    # محاسبه و عدد
+    # -----------------------------------------------------
+
+    elif (
+        "محاسبه" in text_lower
+        or "تعداد" in text_lower
+        or "عدد" in text_lower
+        or "درصد" in text_lower
+        or "مبلغ" in text_lower
+        or "جمع" in text_lower
+    ):
+
+        candidates = [
+            "🔢",
+            "🧮",
+            "📊"
+        ]
+
+    # -----------------------------------------------------
+    # نکته و نتیجه
+    # -----------------------------------------------------
+
+    elif (
+        "نکته" in text_lower
+        or "بنابراین" in text_lower
+        or "در نتیجه" in text_lower
+        or "توجه" in text_lower
+    ):
+
+        candidates = [
+            "📌",
+            "💡",
+            "✅"
+        ]
+
+    # -----------------------------------------------------
+    # حالت عمومی
+    # -----------------------------------------------------
+
+    else:
+
+        candidates = [
+            "📌",
+            "💡",
+            "📚"
+        ]
+
+    # -----------------------------------------------------
+    # انتخاب اولین ایموجی که قبلاً استفاده نشده
+    # -----------------------------------------------------
+
+    for emoji in candidates:
+
+        if emoji not in used_emojis:
+            return emoji
+
+    return None
+
+
+# =========================================================
+# قالب‌بندی پاسخ هوش مصنوعی
+# =========================================================
+
+def format_ai_answer(answer):
 
     if not answer:
         return answer
 
     # -----------------------------------------------------
-    # تبدیل Boldهای Markdown به حالت بدون ستاره
-    # مثال:
-    # **ماده ۲** قانون
-    #
-    # تبدیل می‌شود به:
-    # 📌 ماده ۲ قانون
+    # حذف Markdown Bold
     # -----------------------------------------------------
 
-    bold_pattern = r"\*\*(.*?)\*\*"
-
-    bold_matches = re.findall(
-        bold_pattern,
+    answer = re.sub(
+        r"\*\*(.*?)\*\*",
+        r"\1",
         answer,
         flags=re.DOTALL
     )
 
-    for index, match in enumerate(bold_matches):
-
-        if index < 3:
-            replacement = f"📌 {match}"
-        else:
-            replacement = match
-
-        answer = answer.replace(
-            f"**{match}**",
-            replacement,
-            1
-        )
-
     # -----------------------------------------------------
-    # حذف ستاره‌های تکی Markdown
+    # حذف ستاره‌های باقی‌مانده
     # -----------------------------------------------------
 
     answer = answer.replace("*", "")
 
     # -----------------------------------------------------
-    # حذف ایموجی‌های اضافه
-    # حداکثر ۳ ایموجی در پاسخ
+    # حذف تمام ایموجی‌هایی که مدل ممکن است تولید کرده باشد
     # -----------------------------------------------------
 
-    emoji_pattern = (
-        r"[\U0001F300-\U0001FAFF]"
-        r"|[\U00002700-\U000027BF]"
-        r"|[\U0001F1E6-\U0001F1FF]"
-    )
-
-    emojis = re.findall(
-        emoji_pattern,
+    answer = re.sub(
+        EMOJI_PATTERN,
+        "",
         answer
     )
 
-    if len(emojis) > 3:
-
-        count = 0
-
-        def keep_first_three(match):
-
-            nonlocal count
-
-            if count < 3:
-                count += 1
-                return match.group(0)
-
-            return ""
-
-        answer = re.sub(
-            emoji_pattern,
-            keep_first_three,
-            answer
-        )
-
     # -----------------------------------------------------
-    # اگر هیچ ایموجی وجود نداشت،
-    # یک ایموجی مرتبط به ابتدای پاسخ اضافه می‌کنیم.
+    # تمیز کردن فاصله‌های اضافی
     # -----------------------------------------------------
 
-    emojis_after_clean = re.findall(
-        emoji_pattern,
+    answer = re.sub(
+        r"[ \t]+",
+        " ",
         answer
     )
 
-    if len(emojis_after_clean) == 0:
+    answer = re.sub(
+        r"\n{3,}",
+        "\n\n",
+        answer
+    )
+
+    answer = answer.strip()
+
+    if not answer:
+        return answer
+
+    # -----------------------------------------------------
+    # تقسیم پاسخ به خطوط
+    # -----------------------------------------------------
+
+    lines = answer.split("\n")
+
+    used_emojis = set()
+    emoji_count = 0
+
+    formatted_lines = []
+
+    for line in lines:
+
+        stripped_line = line.strip()
+
+        if not stripped_line:
+
+            formatted_lines.append(line)
+            continue
+
+        # -------------------------------------------------
+        # فقط در حداکثر ۳ بخش ایموجی قرار می‌دهیم
+        # -------------------------------------------------
+
+        if emoji_count < 3:
+
+            emoji = get_emoji_for_text(
+                stripped_line,
+                used_emojis
+            )
+
+            if emoji:
+
+                # -----------------------------------------
+                # ایموجی در ابتدای متن قرار می‌گیرد
+                # -----------------------------------------
+
+                leading_spaces = line[
+                    :len(line) - len(line.lstrip())
+                ]
+
+                line = (
+                    leading_spaces
+                    + emoji
+                    + " "
+                    + stripped_line
+                )
+
+                used_emojis.add(emoji)
+                emoji_count += 1
+
+        formatted_lines.append(line)
+
+    answer = "\n".join(formatted_lines)
+
+    # -----------------------------------------------------
+    # اگر هیچ ایموجی اضافه نشد، یکی در ابتدای پاسخ قرار بده
+    # -----------------------------------------------------
+
+    if emoji_count == 0:
 
         answer = "📌 " + answer
 
@@ -266,7 +501,10 @@ async def ask_ai(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    if not context.user_data.get("ai_mode", False):
+    if not context.user_data.get(
+        "ai_mode",
+        False
+    ):
         return
 
     user_question = update.message.text.strip()
@@ -274,23 +512,30 @@ async def ask_ai(
     if not user_question:
         return
 
-    # سقف ورودی برای جلوگیری از ارسال متن‌های بسیار بزرگ
+    # سقف ورودی
     user_question = user_question[:3000]
 
     if not OPENAI_API_KEY or client is None:
+
         await update.message.reply_text(
             "⚠️ اتصال دستیار هوشمند تنظیم نشده است.\n"
             "OPENAI_API_KEY را در Environment Variables رندر بررسی کنید."
         )
+
         return
 
+    # -----------------------------------------------------
     # تاریخچه محدود
+    # -----------------------------------------------------
+
     history = context.user_data.setdefault(
         "ai_history",
         []
     )
 
-    recent_history = history[-AI_HISTORY_MESSAGES:]
+    recent_history = history[
+        -AI_HISTORY_MESSAGES:
+    ]
 
     input_parts = []
 
@@ -326,14 +571,14 @@ async def ask_ai(
         if not answer:
 
             answer = (
-                "⚠️ پاسخی از سرویس هوش مصنوعی دریافت نشد."
+                "پاسخی از سرویس هوش مصنوعی دریافت نشد."
             )
 
         # -------------------------------------------------
-        # پاک‌سازی پاسخ و کنترل ایموجی
+        # قالب‌بندی نهایی پاسخ
         # -------------------------------------------------
 
-        answer = clean_ai_answer(answer)
+        answer = format_ai_answer(answer)
 
         # -------------------------------------------------
         # ذخیره تاریخچه
@@ -341,15 +586,21 @@ async def ask_ai(
 
         history.append({
             "role": "user",
-            "content": user_question[:AI_HISTORY_CHAR_LIMIT]
+            "content": user_question[
+                :AI_HISTORY_CHAR_LIMIT
+            ]
         })
 
         history.append({
             "role": "assistant",
-            "content": answer[:AI_HISTORY_CHAR_LIMIT]
+            "content": answer[
+                :AI_HISTORY_CHAR_LIMIT
+            ]
         })
 
-        del history[:-AI_HISTORY_MESSAGES]
+        del history[
+            :-AI_HISTORY_MESSAGES
+        ]
 
         # -------------------------------------------------
         # تقسیم پیام‌های طولانی
@@ -369,17 +620,23 @@ async def ask_ai(
                 answer[:max_length]
             )
 
-            remaining_text = answer[max_length:]
+            remaining_text = answer[
+                max_length:
+            ]
 
             while remaining_text:
 
-                chunk = remaining_text[:max_length]
+                chunk = remaining_text[
+                    :max_length
+                ]
 
                 await update.message.reply_text(
                     chunk
                 )
 
-                remaining_text = remaining_text[max_length:]
+                remaining_text = remaining_text[
+                    max_length:
+                ]
 
     except Exception as e:
 
@@ -727,10 +984,12 @@ async def excel_intermediate_download(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    context.user_data["menu_level"] = "excel_intermediate_download"
+    context.user_data["menu_level"] = (
+        "excel_intermediate_download"
+    )
 
     # -----------------------------------------------------
-    # دکمه‌های Inline مربوط به ۹ قسمت
+    # دکمه‌های Inline
     # -----------------------------------------------------
 
     keyboard = [
@@ -805,10 +1064,7 @@ async def excel_intermediate_download(
     )
 
     # -----------------------------------------------------
-    # نکته مهم:
-    # اینجا ReplyKeyboardMarkup را هم مشخص می‌کنیم
-    # تا دکمه بازگشت همین صفحه مستقیماً به
-    # educational_videos برگردد.
+    # کیبورد بازگشت
     # -----------------------------------------------------
 
     reply_keyboard = [
@@ -823,7 +1079,9 @@ async def excel_intermediate_download(
 
     await update.message.reply_text(
         "🔙 بازگشت به لیست ویدئوها:",
-        reply_markup=create_keyboard(reply_keyboard)
+        reply_markup=create_keyboard(
+            reply_keyboard
+        )
     )
 
 
@@ -836,40 +1094,86 @@ async def back(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    level = context.user_data.get("menu_level")
+    level = context.user_data.get(
+        "menu_level"
+    )
 
-    if level in ["in_person_courses", "online_courses"]:
-        await courses(update, context)
+    if level in [
+        "in_person_courses",
+        "online_courses"
+    ]:
 
-    elif level in ["tax_system", "power_query"]:
-        await in_person_courses(update, context)
+        await courses(
+            update,
+            context
+        )
+
+    elif level in [
+        "tax_system",
+        "power_query"
+    ]:
+
+        await in_person_courses(
+            update,
+            context
+        )
 
     elif level == "power_query_link":
-        await power_query(update, context)
 
-    elif level in ["instagram", "telegram", "rubika"]:
-        await contact(update, context)
+        await power_query(
+            update,
+            context
+        )
+
+    elif level in [
+        "instagram",
+        "telegram",
+        "rubika"
+    ]:
+
+        await contact(
+            update,
+            context
+        )
 
     elif level == "excel_beginner":
-        await educational_videos(update, context)
+
+        await educational_videos(
+            update,
+            context
+        )
 
     elif level == "excel_beginner_download":
-        await excel_beginner(update, context)
+
+        await excel_beginner(
+            update,
+            context
+        )
 
     elif level == "excel_intermediate":
-        await educational_videos(update, context)
 
-    # -----------------------------------------------------
-    # اصلاح مهم:
-    # از صفحه لینک‌های نیمه پیشرفته مستقیماً
-    # به صفحه ویدئوهای آموزشی برمی‌گردد.
-    # -----------------------------------------------------
+        await educational_videos(
+            update,
+            context
+        )
 
     elif level == "excel_intermediate_download":
-        await educational_videos(update, context)
+
+        # -----------------------------------------------
+        # یک مرحله‌ای برگشت به صفحه ویدئوهای آموزشی
+        # -----------------------------------------------
+
+        await educational_videos(
+            update,
+            context
+        )
 
     else:
-        await start(update, context)
+
+        await start(
+            update,
+            context
+        )
 
 
 # =========================================================
@@ -881,7 +1185,9 @@ async def download_links(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    level = context.user_data.get("menu_level")
+    level = context.user_data.get(
+        "menu_level"
+    )
 
     if level == "excel_beginner":
 
@@ -902,7 +1208,9 @@ async def download_links(
 # ساخت Application
 # =========================================================
 
-app = Application.builder().token(TOKEN).build()
+app = Application.builder().token(
+    TOKEN
+).build()
 
 
 # =========================================================
@@ -923,7 +1231,9 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🤖 دستیار هوش مصنوعی"]),
+        filters.Text(
+            ["🤖 دستیار هوش مصنوعی"]
+        ),
         ai_assistant
     )
 )
@@ -935,21 +1245,27 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🎓 دوره‌های آموزشی"]),
+        filters.Text(
+            ["🎓 دوره‌های آموزشی"]
+        ),
         courses
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🎬 ویدئوهای آموزشی"]),
+        filters.Text(
+            ["🎬 ویدئوهای آموزشی"]
+        ),
         educational_videos
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📱 ارتباط با ما"]),
+        filters.Text(
+            ["📱 ارتباط با ما"]
+        ),
         contact
     )
 )
@@ -961,14 +1277,18 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🏫 دوره‌های آموزشی حضوری"]),
+        filters.Text(
+            ["🏫 دوره‌های آموزشی حضوری"]
+        ),
         in_person_courses
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["💻 دوره‌های آموزشی آنلاین"]),
+        filters.Text(
+            ["💻 دوره‌های آموزشی آنلاین"]
+        ),
         online_courses
     )
 )
@@ -980,21 +1300,27 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📊 دوره آموزش پاور کوئری"]),
+        filters.Text(
+            ["📊 دوره آموزش پاور کوئری"]
+        ),
         power_query
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📑 دوره سامانه مودیان"]),
+        filters.Text(
+            ["📑 دوره سامانه مودیان"]
+        ),
         tax_system
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📊 مشاهده و ثبت‌نام دوره"]),
+        filters.Text(
+            ["📊 مشاهده و ثبت‌نام دوره"]
+        ),
         power_query_link
     )
 )
@@ -1006,21 +1332,27 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📸 اینستاگرام"]),
+        filters.Text(
+            ["📸 اینستاگرام"]
+        ),
         instagram
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📢 کانال تلگرام"]),
+        filters.Text(
+            ["📢 کانال تلگرام"]
+        ),
         telegram_channel
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🟠 کانال روبیکا"]),
+        filters.Text(
+            ["🟠 کانال روبیکا"]
+        ),
         rubika
     )
 )
@@ -1032,14 +1364,18 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📗 ویدئوهای آموزشی مقدماتی اکسل"]),
+        filters.Text(
+            ["📗 ویدئوهای آموزشی مقدماتی اکسل"]
+        ),
         excel_beginner
     )
 )
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📘 ویدئوهای آموزشی نیمه پیشرفته اکسل"]),
+        filters.Text(
+            ["📘 ویدئوهای آموزشی نیمه پیشرفته اکسل"]
+        ),
         excel_intermediate
     )
 )
@@ -1051,7 +1387,9 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["📥 لینک‌های دانلود دوره"]),
+        filters.Text(
+            ["📥 لینک‌های دانلود دوره"]
+        ),
         download_links
     )
 )
@@ -1063,7 +1401,9 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🔙 بازگشت"]),
+        filters.Text(
+            ["🔙 بازگشت"]
+        ),
         back
     )
 )
@@ -1075,7 +1415,9 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text(["🏠 منوی اصلی"]),
+        filters.Text(
+            ["🏠 منوی اصلی"]
+        ),
         start
     )
 )
@@ -1086,22 +1428,39 @@ app.add_handler(
 # =========================================================
 
 MENU_BUTTONS = [
+
     "🤖 دستیار هوش مصنوعی",
+
     "🎓 دوره‌های آموزشی",
+
     "🎬 ویدئوهای آموزشی",
+
     "📱 ارتباط با ما",
+
     "🏫 دوره‌های آموزشی حضوری",
+
     "💻 دوره‌های آموزشی آنلاین",
+
     "📊 دوره آموزش پاور کوئری",
+
     "📑 دوره سامانه مودیان",
+
     "📊 مشاهده و ثبت‌نام دوره",
+
     "📸 اینستاگرام",
+
     "📢 کانال تلگرام",
+
     "🟠 کانال روبیکا",
+
     "📗 ویدئوهای آموزشی مقدماتی اکسل",
+
     "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل",
+
     "📥 لینک‌های دانلود دوره",
+
     "🔙 بازگشت",
+
     "🏠 منوی اصلی"
 ]
 
@@ -1121,6 +1480,7 @@ app.add_handler(
 # =========================================================
 
 if not URL:
+
     raise ValueError(
         "RENDER_EXTERNAL_URL در Environment Variables تنظیم نشده است."
     )
