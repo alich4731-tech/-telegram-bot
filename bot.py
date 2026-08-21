@@ -8,15 +8,14 @@ from openai import OpenAI
 from telegram import (
     Update,
     ReplyKeyboardMarkup,
-    InlineKeyboardMarkup,
     InlineKeyboardButton,
+    InlineKeyboardMarkup,
 )
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     ContextTypes,
-    ChatMemberHandler,
     filters,
 )
 
@@ -32,13 +31,6 @@ URL = os.getenv("RENDER_EXTERNAL_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 AI_MODEL = os.getenv("AI_MODEL", "gpt-5.6-luna")
-
-# =========================================================
-# کانال مورد نیاز برای استفاده از دستیار هوش مصنوعی
-# =========================================================
-
-REQUIRED_CHANNEL = "@Alichavoshiaccounting"
-REQUIRED_CHANNEL_LINK = "https://t.me/Alichavoshiaccounting"
 
 # این مقادیر محدودیت سخت برای کوتاه کردن پاسخ نیستند.
 # فقط سقف فنی API هستند.
@@ -70,6 +62,14 @@ AI_WEB_SEARCH_CONTEXT = os.getenv(
     "AI_WEB_SEARCH_CONTEXT",
     "high"
 )
+
+
+# =========================================================
+# کنترل عضویت کانال
+# =========================================================
+
+CHANNEL_USERNAME = "@Alichavoshiaccounting"
+CHANNEL_URL = "https://t.me/Alichavoshiaccounting"
 
 
 # =========================================================
@@ -413,7 +413,7 @@ AI_SYSTEM_PROMPT = """
 • تبصره ... ماده ... قانون ...
 • بخشنامه شماره ... مورخ ...
 • قانون بودجه سال ۱۴۰۵
-• مصوبه شورای عالی کار ...
+• مصوبه شورای عالی کار ...  
 
 این بخش باید بسیار خلاصه باشد و حداکثر چند مورد مهم را شامل شود.
 
@@ -592,216 +592,6 @@ AI_SYSTEM_PROMPT = """
 
 
 # =========================================================
-# کنترل عضویت در کانال
-# =========================================================
-
-async def check_channel_membership(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    send_message=True,
-):
-    """
-    بررسی می‌کند که کاربر عضو کانال @Alichavoshiaccounting باشد.
-
-    اگر عضو نباشد:
-    - دسترسی AI قطع می‌شود.
-    - ai_mode غیرفعال می‌شود.
-    - در صورت نیاز پیام عضویت نمایش داده می‌شود.
-    """
-
-    user = update.effective_user
-
-    if not user:
-        return False
-
-    try:
-        member = await context.bot.get_chat_member(
-            chat_id=REQUIRED_CHANNEL,
-            user_id=user.id,
-        )
-
-        status = member.status
-
-        is_member = status in (
-            "member",
-            "administrator",
-            "creator",
-        )
-
-    except Exception as e:
-
-        print(
-            f"CHANNEL MEMBERSHIP CHECK ERROR "
-            f"[{type(e).__name__}]: {e}"
-        )
-
-        # در صورت خطای موقت API، دسترسی را قطعی رد نکن.
-        return False
-
-    if is_member:
-        return True
-
-    # قطع دسترسی AI
-    context.user_data["ai_mode"] = False
-
-    if send_message and update.effective_message:
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "📢 عضویت در کانال",
-                    url=REQUIRED_CHANNEL_LINK,
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔄 بررسی عضویت",
-                    callback_data="check_channel_membership",
-                )
-            ],
-        ]
-
-        await update.effective_message.reply_text(
-            "🔒 برای استفاده از دستیار هوشمند حسابداری ACN "
-            "ابتدا باید در کانال ما عضو شوید.\n\n"
-            "📢 پس از عضویت، دوباره وارد بخش دستیار هوشمند شوید.",
-            reply_markup=InlineKeyboardMarkup(
-                keyboard
-            ),
-        )
-
-    return False
-
-
-# =========================================================
-# بررسی مجدد عضویت از طریق دکمه
-# =========================================================
-
-async def check_membership_callback(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    query = update.callback_query
-
-    if not query:
-        return
-
-    await query.answer()
-
-    user = update.effective_user
-
-    if not user:
-        return
-
-    try:
-
-        member = await context.bot.get_chat_member(
-            chat_id=REQUIRED_CHANNEL,
-            user_id=user.id,
-        )
-
-        is_member = member.status in (
-            "member",
-            "administrator",
-            "creator",
-        )
-
-    except Exception as e:
-
-        print(
-            f"CHANNEL CALLBACK CHECK ERROR "
-            f"[{type(e).__name__}]: {e}"
-        )
-
-        await query.message.reply_text(
-            "⚠️ در بررسی عضویت مشکلی ایجاد شد. "
-            "لطفاً چند لحظه بعد دوباره تلاش کنید."
-        )
-
-        return
-
-    if is_member:
-
-        context.user_data["ai_mode"] = True
-        context.user_data["menu_level"] = "ai"
-
-        await query.message.reply_text(
-            "✅ عضویت شما تأیید شد.\n\n"
-            "🤖 اکنون می‌توانید سؤال خود را برای دستیار هوشمند ارسال کنید."
-        )
-
-    else:
-
-        await query.message.reply_text(
-            "❌ هنوز عضویت شما در کانال تأیید نشده است.\n\n"
-            "ابتدا در کانال عضو شوید و سپس دوباره گزینه «بررسی عضویت» را بزنید.",
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "📢 عضویت در کانال",
-                            url=REQUIRED_CHANNEL_LINK,
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "🔄 بررسی عضویت",
-                            callback_data="check_channel_membership",
-                        )
-                    ],
-                ]
-            ),
-        )
-
-
-# =========================================================
-# کنترل خروج کاربر از کانال
-# =========================================================
-
-async def channel_member_update(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    chat_member_update = update.chat_member
-
-    if not chat_member_update:
-        return
-
-    if (
-        chat_member_update.chat.username
-        and chat_member_update.chat.username.lower()
-        != REQUIRED_CHANNEL.lstrip("@").lower()
-    ):
-        return
-
-    new_status = (
-        chat_member_update.new_chat_member.status
-    )
-
-    user_id = (
-        chat_member_update.new_chat_member.user.id
-    )
-
-    if new_status in (
-        "left",
-        "kicked",
-    ):
-
-        # اگر کاربر از کانال خارج شده باشد،
-        # دسترسی AI او فوراً در session فعلی قطع می‌شود.
-        context.application.user_data.get(
-            user_id,
-            {}
-        )["ai_mode"] = False
-
-        print(
-            f"AI ACCESS REVOKED: user_id={user_id}"
-        )
-
-
-# =========================================================
 # ساخت کیبورد
 # =========================================================
 
@@ -810,6 +600,158 @@ def create_keyboard(buttons):
         buttons,
         resize_keyboard=True,
     )
+
+
+# =========================================================
+# بررسی عضویت کاربر در کانال
+# =========================================================
+
+async def is_channel_member(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    try:
+
+        user_id = update.effective_user.id
+
+        member = await context.bot.get_chat_member(
+            chat_id=CHANNEL_USERNAME,
+            user_id=user_id,
+        )
+
+        return member.status in [
+            "member",
+            "administrator",
+            "creator",
+        ]
+
+    except Exception as e:
+
+        print(
+            f"CHANNEL MEMBERSHIP CHECK ERROR "
+            f"[{type(e).__name__}]: {e}"
+        )
+
+        return False
+
+
+# =========================================================
+# پیام عضویت در کانال
+# =========================================================
+
+async def request_channel_membership(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    from_ai=False,
+):
+    context.user_data["ai_mode"] = False
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "📢 عضویت در کانال",
+                url=CHANNEL_URL,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "✅ بررسی عضویت",
+                callback_data="check_channel_membership",
+            )
+        ],
+    ]
+
+    message_text = (
+        "🔐 دسترسی به دستیار هوشمند\n\n"
+        "🤖 این دستیار هوشمند مخصوص اعضای کانال "
+        "Alichavoshiaccounting است.\n\n"
+        "برای استفاده از دستیار هوشمند، ابتدا در کانال "
+        "Alichavoshiaccounting عضو شوید.\n\n"
+        "پس از عضویت، روی «✅ بررسی عضویت» بزنید."
+    )
+
+    if from_ai:
+        message_text += (
+            "\n\n⚠️ دسترسی شما به دستیار هوشمند تا زمان "
+            "تأیید عضویت در کانال فعال نخواهد بود."
+        )
+
+    await update.message.reply_text(
+        message_text,
+        reply_markup=InlineKeyboardMarkup(
+            keyboard
+        ),
+    )
+
+
+# =========================================================
+# بررسی مجدد عضویت از طریق دکمه
+# =========================================================
+
+async def check_channel_membership_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    query = update.callback_query
+
+    await query.answer()
+
+    try:
+
+        user_id = update.effective_user.id
+
+        member = await context.bot.get_chat_member(
+            chat_id=CHANNEL_USERNAME,
+            user_id=user_id,
+        )
+
+        is_member = member.status in [
+            "member",
+            "administrator",
+            "creator",
+        ]
+
+    except Exception as e:
+
+        print(
+            f"CHANNEL CALLBACK CHECK ERROR "
+            f"[{type(e).__name__}]: {e}"
+        )
+
+        is_member = False
+
+    if not is_member:
+
+        await query.edit_message_text(
+            "❌ عضویت شما در کانال تأیید نشد.\n\n"
+            "لطفاً ابتدا در کانال "
+            "Alichavoshiaccounting عضو شوید و سپس "
+            "دوباره روی «بررسی عضویت» بزنید."
+        )
+
+        return
+
+    context.user_data["channel_membership_verified"] = True
+
+    ai_mode = context.user_data.get(
+        "ai_mode",
+        False
+    )
+
+    if ai_mode:
+
+        await query.edit_message_text(
+            "✅ عضویت شما در کانال Alichavoshiaccounting تأیید شد.\n\n"
+            "اکنون پیام ارسال کنید."
+        )
+
+    else:
+
+        await query.edit_message_text(
+            "✅ عضویت شما در کانال Alichavoshiaccounting تأیید شد.\n\n"
+            "اکنون وارد گزینه «🤖 دستیار هوش مصنوعی» شوید."
+        )
 
 
 # =========================================================
@@ -846,19 +788,25 @@ async def ai_assistant(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    # =====================================================
-    # کنترل عضویت هنگام ورود به AI
-    # =====================================================
-
-    is_member = await check_channel_membership(
+    is_member = await is_channel_member(
         update,
-        context,
-        send_message=True,
+        context
     )
 
     if not is_member:
+
+        context.user_data["ai_mode"] = False
+        context.user_data["channel_membership_verified"] = False
+
+        await request_channel_membership(
+            update,
+            context,
+            from_ai=False,
+        )
+
         return
 
+    context.user_data["channel_membership_verified"] = True
     context.user_data["menu_level"] = "ai"
     context.user_data["ai_mode"] = True
     context.user_data["ai_history"] = []
@@ -877,6 +825,7 @@ async def ai_assistant(
         "• 📊 اکسل و Power Query در حسابداری\n"
         "• 💼 سایر موضوعات مرتبط با حسابداری\n\n"
         "🖼️ امکان ارسال عکس سند، فاکتور یا مدرک حسابداری نیز فعال است.\n\n"
+        "اکنون پیام ارسال کنید.\n\n"
         "🔙 برای خروج از این بخش، گزینه «بازگشت» را انتخاب کنید.",
         reply_markup=create_keyboard(keyboard),
     )
@@ -1177,7 +1126,7 @@ def _collect_source_urls(response):
                             "title": getattr(
                                 annotation,
                                 "title",
-                                None,
+                                None
                             ),
                         }
                     )
@@ -1822,14 +1771,25 @@ async def ask_ai(
     # کنترل عضویت قبل از هر سؤال متنی
     # =====================================================
 
-    is_member = await check_channel_membership(
+    is_member = await is_channel_member(
         update,
-        context,
-        send_message=True,
+        context
     )
 
     if not is_member:
+
+        context.user_data["ai_mode"] = False
+        context.user_data["channel_membership_verified"] = False
+
+        await request_channel_membership(
+            update,
+            context,
+            from_ai=True,
+        )
+
         return
+
+    context.user_data["channel_membership_verified"] = True
 
     user_question = (
         update.message.text
@@ -1919,14 +1879,25 @@ async def ask_ai_image(
     # کنترل عضویت قبل از هر تصویر
     # =====================================================
 
-    is_member = await check_channel_membership(
+    is_member = await is_channel_member(
         update,
-        context,
-        send_message=True,
+        context
     )
 
     if not is_member:
+
+        context.user_data["ai_mode"] = False
+        context.user_data["channel_membership_verified"] = False
+
+        await request_channel_membership(
+            update,
+            context,
+            from_ai=True,
+        )
+
         return
+
+    context.user_data["channel_membership_verified"] = True
 
     if (
         not OPENAI_API_KEY
@@ -2372,7 +2343,7 @@ async def excel_beginner_download(
 
 
 # =========================================================
-# ویدئوهای نیمه پیشرفته اکسل
+# نیمه پیشرفته اکسل
 # =========================================================
 
 async def excel_intermediate(
@@ -2391,7 +2362,7 @@ async def excel_intermediate(
 
     await update.message.reply_text(
         "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل\n\n"
-        "برای دریافت ویدئوهای آموزشی، "
+        "برای مشاهده ویدئوهای آموزشی، "
         "گزینه زیر را انتخاب کنید:",
         reply_markup=create_keyboard(
             keyboard
@@ -2404,72 +2375,78 @@ async def excel_intermediate_download(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+    # =====================================================
+    # مهم:
+    # menu_level عمداً همان excel_intermediate باقی می‌ماند
+    # تا با یک بار «بازگشت» مستقیماً به صفحه قبل برگردد.
+    # =====================================================
+
     context.user_data[
         "menu_level"
-    ] = "excel_intermediate_download"
+    ] = "excel_intermediate"
 
-    keyboard = [
+    video_buttons = [
         [
             InlineKeyboardButton(
-                "قسمت اول | تابع Concatenate در اکسل",
+                "تابع Concatenate در اکسل",
                 url="https://my.uupload.ir/p/0jka5XvR",
             )
         ],
         [
             InlineKeyboardButton(
-                "قسمت دوم | تابع Textjoin در نرم افزار اکسل",
+                "تابع Textjoin در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/2KDmGQDB",
             )
         ],
         [
             InlineKeyboardButton(
-                "قسمت سوم | تابع If و ترکیب آن با تابع Textjoin در نرم افزار اکسل",
+                "تابع If و ترکیب آن با تابع Textjoin در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/n2JGpEwK",
             )
         ],
         [
             InlineKeyboardButton(
-                "قسمت چهارم | تابع And و ترکیب آن با تابع If در نرم افزار اکسل",
+                "تابع And و ترکیب آن با تابع If در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/BvxABejW",
             )
         ],
         [
             InlineKeyboardButton(
-                "قسمت پنجم | تابع Or و ترکیب آن با تابع If در نرم افزار اکسل",
+                "تابع Or و ترکیب آن با تابع If در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/JgwO5yWN",
             )
         ],
         [
             InlineKeyboardButton(
-                "قسمت ششم | تابع Xlookup در نرم افزار اکسل",
+                "تابع Xlookup در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/ODwN9w42",
             )
         ],
         [
             InlineKeyboardButton(
-                "قسمت هفتم | تابع Sumifs در نرم افزار اکسل",
+                "تابع Sumifs در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/1LdxaM00",
             )
         ],
         [
             InlineKeyboardButton(
-                "قسمت هشتم | تابع Vlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
+                "تابع Vlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/aG5a79xw",
             )
         ],
         [
             InlineKeyboardButton(
-                "قسمت نهم (قسمت آخر) | تابع Hlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
+                "تابع Hlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
                 url="https://my.uupload.ir/p/eyJLaKYX",
             )
         ],
     ]
 
     await update.message.reply_text(
-        "📥 ویدئوهای آموزشی نیمه پیشرفته اکسل\n\n"
-        "قسمت مورد نظر خود را انتخاب کنید:",
+        "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل\n\n"
+        "موضوع مورد نظر خود را انتخاب کنید:",
         reply_markup=InlineKeyboardMarkup(
-            keyboard
+            video_buttons
         ),
     )
 
@@ -2557,13 +2534,6 @@ async def back(
             context
         )
 
-    elif level == "excel_intermediate_download":
-
-        await excel_intermediate(
-            update,
-            context
-        )
-
     else:
 
         await start(
@@ -2625,13 +2595,13 @@ app.add_handler(
 
 
 # =========================================================
-# کنترل عضویت کانال
+# بررسی عضویت کانال
 # =========================================================
 
 app.add_handler(
-    ChatMemberHandler(
-        channel_member_update,
-        ChatMemberHandler.CHAT_MEMBER,
+    MessageHandler(
+        filters.StatusUpdate.NEW_CHAT_MEMBERS,
+        lambda update, context: None,
     )
 )
 
@@ -2640,15 +2610,11 @@ app.add_handler(
 # بررسی عضویت از طریق دکمه
 # =========================================================
 
+from telegram.ext import CallbackQueryHandler
+
 app.add_handler(
-    # این Handler برای callback دکمه «بررسی عضویت» است.
-    # چون callback_query است، در ادامه توسط الگوی callback_data مدیریت می‌شود.
-    # این بخش با CallbackQueryHandler ثبت می‌شود.
-    __import__(
-        "telegram.ext",
-        fromlist=["CallbackQueryHandler"]
-    ).CallbackQueryHandler(
-        check_membership_callback,
+    CallbackQueryHandler(
+        check_channel_membership_callback,
         pattern="^check_channel_membership$",
     )
 )
