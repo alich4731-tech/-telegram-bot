@@ -722,9 +722,10 @@ async def show_channel_membership_required(
 
         await update.effective_message.reply_text(
             "⚠️ دسترسی به دستیار هوشمند قطع شد.\n\n"
-            "برای استفاده از دستیار هوشمند باید عضو کانال "
-            f"@{CHANNEL_NAME} باشید.\n\n"
-            "پس از عضویت، پیام خود را ارسال کنید.",
+            "عضویت شما در کانال "
+            f"@{CHANNEL_NAME} تأیید نشد.\n\n"
+            "برای ادامه، ابتدا عضو کانال شوید و سپس از منوی اصلی "
+            "دوباره گزینه «🤖 دستیار هوش مصنوعی» را انتخاب کنید.",
             reply_markup=create_keyboard(keyboard),
         )
 
@@ -1798,6 +1799,24 @@ async def ask_ai(
             )
         )
 
+        # =================================================
+        # بررسی مجدد عضویت بعد از دریافت پاسخ AI
+        # =================================================
+
+        is_member = await ensure_ai_membership(
+            update,
+            context
+        )
+
+        if not is_member:
+
+            try:
+                await thinking_message.delete()
+            except Exception:
+                pass
+
+            return
+
         await _send_ai_answer(
             update.message,
             answer,
@@ -1950,6 +1969,24 @@ async def ask_ai_image(
                 image_mode=True,
             )
         )
+
+        # =================================================
+        # بررسی مجدد عضویت بعد از دریافت پاسخ AI
+        # =================================================
+
+        is_member = await ensure_ai_membership(
+            update,
+            context
+        )
+
+        if not is_member:
+
+            try:
+                await thinking_message.delete()
+            except Exception:
+                pass
+
+            return
 
         await _send_ai_answer(
             update.message,
@@ -2390,10 +2427,15 @@ async def excel_intermediate_download(
 
     inline_keyboard = []
 
-    for lesson in INTERMEDIATE_LESSONS:
+    for index, lesson in enumerate(
+        INTERMEDIATE_LESSONS,
+        start=1
+    ):
 
+        # شماره قسمت در خط اول و عنوان کامل در خط دوم
+        # قرار می‌گیرد تا عنوان در موبایل فضای بیشتری داشته باشد.
         button_text = (
-            f"{lesson['section']}\n"
+            f"{index}\n"
             f"{lesson['topic']}"
         )
 
