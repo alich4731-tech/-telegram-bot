@@ -32,8 +32,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 AI_MODEL = os.getenv("AI_MODEL", "gpt-5.6-luna")
 
-# این مقادیر محدودیت سخت برای کوتاه کردن پاسخ نیستند.
-# فقط سقف فنی API هستند.
 AI_MAX_OUTPUT_TOKENS = int(
     os.getenv("AI_MAX_OUTPUT_TOKENS", "5200")
 )
@@ -65,11 +63,11 @@ AI_WEB_SEARCH_CONTEXT = os.getenv(
 
 
 # =========================================================
-# کنترل عضویت کانال
+# کانال رسمی ربات
 # =========================================================
 
 CHANNEL_USERNAME = "@Alichavoshiaccounting"
-CHANNEL_URL = "https://t.me/Alichavoshiaccounting"
+CHANNEL_NAME = "Alichavoshiaccounting"
 
 
 # =========================================================
@@ -231,10 +229,6 @@ AI_SYSTEM_PROMPT = """
 • پاسخ کامل را قبل از دریافت اطلاعات لازم ارائه نکن.
 • چند سؤال غیرضروری را هم‌زمان نپرس.
 
-مثلاً برای «ثبت خرید کالا» لازم نیست ده سؤال بپرسی.
-
-فقط موارد مؤثر را بپرس.
-
 =========================================================
 ثبت‌های حسابداری
 =========================================================
@@ -305,12 +299,69 @@ AI_SYSTEM_PROMPT = """
 هرگز چنین اطلاعاتی را صرفاً از حافظه مدل ارائه نکن.
 
 =========================================================
-تحقیق چندمنبعی برای اطلاعات قانونی
+تحقیق چندمنبعی و کنترل همه مقررات مرتبط
 =========================================================
 
-برای اطلاعات قانونی و به‌روز، فقط به یک سایت اکتفا نکن.
+در موضوعات قانونی، فقط پیدا کردن یک مقرره کافی نیست.
 
-در صورت امکان اطلاعات مهم را با حداقل دو منبع مستقل بررسی و تطبیق کن.
+قبل از پاسخ نهایی، موضوع را از نظر تمام مقررات مرتبط بررسی کن.
+
+ممکن است یک موضوع هم‌زمان در موارد زیر مطرح شده باشد:
+• قانون اصلی
+• قانون بودجه همان سال
+• قانون بودجه سنواتی
+• تبصره‌های قانون
+• آیین‌نامه
+• بخشنامه
+• دستورالعمل
+• مصوبه
+• رأی لازم‌الاتباع
+• اصلاحیه
+• الحاقیه
+• مقرره جدیدتر
+
+بنابراین اگر سؤال مربوط به یک حکم، نرخ، مبلغ، معافیت، تکلیف، جریمه،
+حق بیمه، حقوق و دستمزد یا هر موضوع قانونی است، فقط یک عبارت یا یک قانون
+را جست‌وجو نکن.
+
+تمام مقرراتی را که احتمال می‌دهی روی نتیجه اثر داشته باشند بررسی کن.
+
+به‌خصوص برای موضوعات سالانه:
+• قانون بودجه سال مورد سؤال را کنترل کن.
+• قوانین دائمی مرتبط را کنترل کن.
+• تبصره‌ها و بندهای مرتبط را کنترل کن.
+• بخشنامه‌ها و دستورالعمل‌های اجرایی جدیدتر را کنترل کن.
+• اصلاحیه‌ها و مقررات جایگزین را کنترل کن.
+• در صورت وجود تعارض، مقرره معتبرتر و جدیدتر را شناسایی کن.
+
+حداقل تلاش کن اطلاعات مهم قانونی را از چند منبع مستقل و معتبر بررسی و تطبیق کنی.
+
+اگر یک پاسخ از یک قانون به دست می‌آید ولی قانون بودجه یا مقرره جدیدتر
+حکم متفاوتی ایجاد کرده است، پاسخ نهایی باید اثر قانون یا مقرره جدیدتر را
+در نظر بگیرد.
+
+اگر چند مقرره هم‌زمان مرتبط هستند، هیچ‌کدام را صرفاً به دلیل پیدا کردن
+یک منبع اولیه نادیده نگیر.
+
+پس از انجام جست‌وجو، یک مرحله «بازبینی نهایی حقوقی» انجام بده:
+
+1. آیا تمام قوانین مرتبط بررسی شده‌اند؟
+2. آیا قانون بودجه سال مربوط بررسی شده است؟
+3. آیا تبصره یا بند خاصی نتیجه را تغییر می‌دهد؟
+4. آیا بخشنامه یا دستورالعمل جدیدتری وجود دارد؟
+5. آیا مقرره‌ای اصلاح یا ابطال شده است؟
+6. آیا رقم یا حکم اعلام‌شده مربوط به همان سال و همان گروه مشمول است؟
+7. آیا واحد پول ریال یا تومان به‌درستی تشخیص داده شده است؟
+8. آیا شرایط خاصی برای اعمال حکم وجود دارد؟
+
+فقط پس از این بازبینی پاسخ نهایی را تولید کن.
+
+اگر نتیجه به علت اختلاف مقررات قطعی نیست، اختلاف را شفاف بیان کن
+و هرگز عدد یا حکم را حدس نزن.
+
+=========================================================
+اولویت منابع
+=========================================================
 
 اولویت منابع:
 
@@ -407,27 +458,27 @@ AI_SYSTEM_PROMPT = """
 
 📌 مبنای قانونی:
 
-در این بخش فقط مهم‌ترین مستندات واقعی و مرتبط را ذکر کن؛ مانند:
+در این بخش فقط مهم‌ترین مستندات واقعی و مرتبطی را ذکر کن که واقعاً در
+پاسخ مورد استفاده قرار گرفته‌اند.
 
+مانند:
 • ماده ۸۶ قانون مالیات‌های مستقیم
 • تبصره ... ماده ... قانون ...
 • بخشنامه شماره ... مورخ ...
 • قانون بودجه سال ۱۴۰۵
-• مصوبه شورای عالی کار ...  
+• مصوبه شورای عالی کار ...
 
-این بخش باید بسیار خلاصه باشد و حداکثر چند مورد مهم را شامل شود.
+اگر چند قانون، قانون بودجه، بخشنامه، آیین‌نامه یا دستورالعمل در نتیجه مؤثر
+بوده‌اند، مهم‌ترین موارد مؤثر را در همین بخش ذکر کن.
 
-اگر شماره ماده، شماره بخشنامه، تاریخ یا عنوان دقیق مقرره را از جست‌وجو
-نتوانستی با اطمینان تأیید کنی، آن را حدس نزن.
+شماره ماده، شماره بخشنامه، تاریخ، شماره آیین‌نامه، شماره دستورالعمل یا عنوان
+مقرره را هرگز حدس نزن.
 
-هرگز شماره ساختگی تولید نکن.
+اگر نتوانستی مشخصات دقیق مستند را با اطمینان تأیید کنی، آن مشخصات را تولید نکن.
 
-اگر پاسخ قانونی بر اساس یک مقرره مشخص است، تا حد امکان همان مقرره را در
-بخش «مبنای قانونی» ذکر کن.
+«📌 مبنای قانونی» باید آخرین بخش پاسخ باشد.
 
-اگر سؤال نیاز به چند مقرره دارد، فقط مهم‌ترین موارد را ذکر کن.
-
-برای سؤال‌های غیرقانونی اصلاً بخش «مبنای قانونی» ایجاد نکن.
+هیچ بخش «منابع» جداگانه‌ای ایجاد نکن.
 
 =========================================================
 منابع و لینک‌ها در پاسخ نهایی
@@ -446,12 +497,15 @@ AI_SYSTEM_PROMPT = """
 • فهرست طولانی منابع
 • بخش «منابع» جداگانه
 
-استفاده از Web Search فقط برای تحقیق، صحت‌سنجی و پیدا کردن مبنای قانونی است.
+Web Search فقط برای تحقیق، صحت‌سنجی و پیدا کردن مبنای قانونی استفاده می‌شود.
 
-در پاسخ نهایی فقط در موضوعات قانونی، بخش بسیار کوتاه «📌 مبنای قانونی»
-را نمایش بده.
+اطلاعات مربوط به منبع قانونی فقط در انتهای پاسخ و در بخش:
 
-این بخش جایگزین لینک منابع است و نباید شامل URL یا citation باشد.
+📌 مبنای قانونی:
+
+نمایش داده شود.
+
+در این بخش نیز URL یا لینک نمایش نده.
 
 =========================================================
 کنترل طول پاسخ
@@ -465,26 +519,6 @@ AI_SYSTEM_PROMPT = """
 
 «حداکثر اطلاعات مفید با حداقل توضیح غیرضروری»
 
-مثال:
-
-اگر کاربر بپرسد:
-«مالیات بر ارزش افزوده چیست؟»
-
-یک تعریف روشن و کوتاه کافی است.
-
-اگر کاربر بپرسد:
-«ثبت حسابداری خرید کالا چیست؟»
-
-در صورتی که اطلاعات لازم مشخص باشد، ثبت مربوط به همان سناریو را ارائه کن.
-
-اگر سؤال مبهم باشد، ابتدا سؤال روشن‌کننده بپرس.
-
-اگر کاربر سؤال بسیار تخصصی و چندبخشی پرسید، پاسخ می‌تواند طولانی باشد.
-
-پاسخ را فقط به خاطر کوتاه بودن بیش از حد ناقص نکن.
-
-اما اگر اطلاعات اضافی به سؤال کاربر کمکی نمی‌کند، آن را حذف کن.
-
 =========================================================
 ایموجی
 =========================================================
@@ -494,8 +528,6 @@ AI_SYSTEM_PROMPT = """
 از ایموجی‌های مرتبط، طبیعی و حرفه‌ای استفاده کن.
 
 نه بیش از حد و نه آن‌قدر کم که پاسخ خشک شود.
-
-ایموجی نباید جایگزین اطلاعات تخصصی شود.
 
 =========================================================
 فرمت تلگرام
@@ -535,8 +567,11 @@ AI_SYSTEM_PROMPT = """
 6. اگر اطلاعات کافی نیست، سؤال روشن‌کننده بپرس.
 7. اگر تصویر به قانون یا مقررات جاری مربوط است، Web Search انجام بده.
 8. اگر برای ثبت حسابداری چند فرض مؤثر وجود دارد، ابتدا اطلاعات لازم را از کاربر بگیر.
-9. اگر تصویر مربوط به قانون یا مقررات است، در انتهای پاسخ «📌 مبنای قانونی» را
-   فقط در صورت وجود مستند قابل‌تأیید اضافه کن.
+9. اگر تصویر مربوط به قانون یا مقررات است، تمام مقررات مرتبط از جمله قانون،
+   قانون بودجه، تبصره‌ها، بخشنامه‌ها و دستورالعمل‌های مؤثر را بررسی کن.
+10. در انتهای پاسخ قانونی، «📌 مبنای قانونی» را فقط با مستندات
+   قابل‌تأیید و واقعاً استفاده‌شده اضافه کن.
+11. هیچ لینکی نمایش نده.
 
 =========================================================
 محدودیت حوزه و جلوگیری از پاسخ به سؤالات متفرقه
@@ -565,12 +600,6 @@ AI_SYSTEM_PROMPT = """
 اگر سؤال ترکیبی است و بخش مرتبط با حوزه تخصصی دستیار دارد، فقط به بخش مرتبط پاسخ بده
 و به بخش خارج از حوزه پاسخ نده.
 
-اگر درباره مرتبط بودن سؤال تردید داری، ابتدا بررسی کن که آیا پاسخ مستقیم به حسابداری،
-مالی، حسابرسی، مالیات، تأمین اجتماعی، حقوق و دستمزد، سامانه مؤدیان، ارزش افزوده
-یا اکسل/Power Query مرتبط با حسابداری مربوط می‌شود یا خیر.
-
-در صورت خارج بودن، پاسخ تخصصی بالا را نمایش بده.
-
 =========================================================
 قانون نهایی
 =========================================================
@@ -581,13 +610,18 @@ AI_SYSTEM_PROMPT = """
 2. ابهام‌های مؤثر را شناسایی کن.
 3. اگر ابهام اساسی وجود دارد، سؤال روشن‌کننده کوتاه بپرس.
 4. اگر موضوع قانونی یا به‌روز است، Web Search انجام بده.
-5. در موضوعات مهم قانونی، اطلاعات را با چند منبع تطبیق بده.
-6. منبع رسمی و جاری را در اولویت قرار بده.
-7. پاسخ را متناسب با سؤال تولید کن.
-8. اطلاعات اضافی غیرضروری نده.
-9. اگر موضوع قانونی است، در انتهای پاسخ «📌 مبنای قانونی» بسیار کوتاه بیاور.
-10. URL، لینک و citation داخلی را در پاسخ نهایی نمایش نده.
-11. هرگز شماره ماده، بخشنامه یا حکم قانونی را حدس نزن.
+5. تمام قوانین و مقررات مرتبط را بررسی کن.
+6. قانون بودجه سال مربوط را در صورت ارتباط کنترل کن.
+7. تبصره‌ها، بندها، بخشنامه‌ها، آیین‌نامه‌ها و دستورالعمل‌های مؤثر را کنترل کن.
+8. اطلاعات را با چند منبع تطبیق بده.
+9. اعتبار زمانی و اصلاحات یا ابطال مقررات را بررسی کن.
+10. یک بازبینی نهایی حقوقی انجام بده.
+11. پاسخ را متناسب با سؤال تولید کن.
+12. اطلاعات اضافی غیرضروری نده.
+13. اگر موضوع قانونی است، در انتهای پاسخ «📌 مبنای قانونی» بسیار کوتاه بیاور.
+14. «📌 مبنای قانونی» باید آخرین بخش پاسخ باشد.
+15. URL، لینک و citation داخلی را در پاسخ نهایی نمایش نده.
+16. هرگز شماره ماده، بخشنامه، آیین‌نامه یا حکم قانونی را حدس نزن.
 """
 
 
@@ -603,27 +637,59 @@ def create_keyboard(buttons):
 
 
 # =========================================================
-# بررسی عضویت کاربر در کانال
+# بررسی عضویت کانال
 # =========================================================
 
-async def is_channel_member(
+async def check_channel_membership(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    try:
+    """
+    بررسی می‌کند که کاربر عضو کانال رسمی باشد.
 
-        user_id = update.effective_user.id
+    وضعیت‌های قابل قبول:
+    • creator
+    • administrator
+    • member
+
+    کاربر restricted فقط در صورتی عضو محسوب می‌شود که is_member=True باشد.
+    """
+
+    user = update.effective_user
+
+    if not user:
+        return False
+
+    try:
 
         member = await context.bot.get_chat_member(
             chat_id=CHANNEL_USERNAME,
-            user_id=user_id,
+            user_id=user.id,
         )
 
-        return member.status in [
-            "member",
-            "administrator",
+        status = getattr(
+            member,
+            "status",
+            None
+        )
+
+        if status in (
             "creator",
-        ]
+            "administrator",
+            "member",
+        ):
+            return True
+
+        if status == "restricted":
+            return bool(
+                getattr(
+                    member,
+                    "is_member",
+                    False
+                )
+            )
+
+        return False
 
     except Exception as e:
 
@@ -636,122 +702,78 @@ async def is_channel_member(
 
 
 # =========================================================
-# پیام عضویت در کانال
+# پیام عدم عضویت
 # =========================================================
 
-async def request_channel_membership(
+async def show_channel_membership_required(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
-    from_ai=False,
+    return_to_main=False,
 ):
+
     context.user_data["ai_mode"] = False
+    context.user_data["menu_level"] = "main"
 
     keyboard = [
-        [
-            InlineKeyboardButton(
-                "📢 عضویت در کانال",
-                url=CHANNEL_URL,
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "✅ بررسی عضویت",
-                callback_data="check_channel_membership",
-            )
-        ],
+        ["🏠 منوی اصلی"],
     ]
 
-    message_text = (
-        "🔐 دسترسی به دستیار هوشمند\n\n"
-        "🤖 این دستیار هوشمند مخصوص اعضای کانال "
-        "Alichavoshiaccounting است.\n\n"
-        "برای استفاده از دستیار هوشمند، ابتدا در کانال "
-        "Alichavoshiaccounting عضو شوید.\n\n"
-        "پس از عضویت، روی «✅ بررسی عضویت» بزنید."
-    )
+    if return_to_main:
 
-    if from_ai:
-        message_text += (
-            "\n\n⚠️ دسترسی شما به دستیار هوشمند تا زمان "
-            "تأیید عضویت در کانال فعال نخواهد بود."
-        )
-
-    await update.message.reply_text(
-        message_text,
-        reply_markup=InlineKeyboardMarkup(
-            keyboard
-        ),
-    )
-
-
-# =========================================================
-# بررسی مجدد عضویت از طریق دکمه
-# =========================================================
-
-async def check_channel_membership_callback(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    query = update.callback_query
-
-    await query.answer()
-
-    try:
-
-        user_id = update.effective_user.id
-
-        member = await context.bot.get_chat_member(
-            chat_id=CHANNEL_USERNAME,
-            user_id=user_id,
-        )
-
-        is_member = member.status in [
-            "member",
-            "administrator",
-            "creator",
-        ]
-
-    except Exception as e:
-
-        print(
-            f"CHANNEL CALLBACK CHECK ERROR "
-            f"[{type(e).__name__}]: {e}"
-        )
-
-        is_member = False
-
-    if not is_member:
-
-        await query.edit_message_text(
-            "❌ عضویت شما در کانال تأیید نشد.\n\n"
-            "لطفاً ابتدا در کانال "
-            "Alichavoshiaccounting عضو شوید و سپس "
-            "دوباره روی «بررسی عضویت» بزنید."
-        )
-
-        return
-
-    context.user_data["channel_membership_verified"] = True
-
-    ai_mode = context.user_data.get(
-        "ai_mode",
-        False
-    )
-
-    if ai_mode:
-
-        await query.edit_message_text(
-            "✅ عضویت شما در کانال Alichavoshiaccounting تأیید شد.\n\n"
-            "اکنون پیام ارسال کنید."
+        await update.effective_message.reply_text(
+            "⚠️ دسترسی به دستیار هوشمند قطع شد.\n\n"
+            "برای استفاده از دستیار هوشمند باید عضو کانال "
+            f"@{CHANNEL_NAME} باشید.\n\n"
+            "پس از عضویت، پیام خود را ارسال کنید.",
+            reply_markup=create_keyboard(keyboard),
         )
 
     else:
 
-        await query.edit_message_text(
-            "✅ عضویت شما در کانال Alichavoshiaccounting تأیید شد.\n\n"
-            "اکنون وارد گزینه «🤖 دستیار هوش مصنوعی» شوید."
+        await update.effective_message.reply_text(
+            "🔒 دسترسی به دستیار هوشمند\n\n"
+            "این هوش مصنوعی مخصوص اعضای کانال "
+            f"@{CHANNEL_NAME} است.\n\n"
+            "برای استفاده از دستیار ابتدا عضو کانال شوید.\n\n"
+            "پس از عضویت، دوباره گزینه «🤖 دستیار هوش مصنوعی» "
+            "را از منوی اصلی انتخاب کنید.",
+            reply_markup=create_keyboard(keyboard),
         )
+
+
+# =========================================================
+# کنترل عضویت قبل از استفاده از AI
+# =========================================================
+
+async def ensure_ai_membership(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    """
+    این تابع قبل از هر عملیات AI اجرا می‌شود.
+
+    اگر کاربر عضو نباشد:
+    • AI خاموش می‌شود.
+    • سطح منو به main برمی‌گردد.
+    • کاربر به منوی اصلی هدایت می‌شود.
+    • دسترسی به AI ادامه پیدا نمی‌کند.
+    """
+
+    is_member = await check_channel_membership(
+        update,
+        context
+    )
+
+    if is_member:
+        return True
+
+    await show_channel_membership_required(
+        update,
+        context,
+        return_to_main=True,
+    )
+
+    return False
 
 
 # =========================================================
@@ -788,25 +810,21 @@ async def ai_assistant(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    is_member = await is_channel_member(
+    is_member = await check_channel_membership(
         update,
         context
     )
 
     if not is_member:
 
-        context.user_data["ai_mode"] = False
-        context.user_data["channel_membership_verified"] = False
-
-        await request_channel_membership(
+        await show_channel_membership_required(
             update,
             context,
-            from_ai=False,
+            return_to_main=False,
         )
 
         return
 
-    context.user_data["channel_membership_verified"] = True
     context.user_data["menu_level"] = "ai"
     context.user_data["ai_mode"] = True
     context.user_data["ai_history"] = []
@@ -817,6 +835,8 @@ async def ai_assistant(
 
     await update.message.reply_text(
         "🤖✨ به دستیار هوشمند حسابداری ACN خوش آمدید\n\n"
+        "این هوش مصنوعی مخصوص اعضای کانال "
+        f"@{CHANNEL_NAME} است.\n\n"
         "📚 سؤال خود را درباره یکی از موضوعات زیر ارسال کنید:\n\n"
         "• 🧾 حسابداری و مالی\n"
         "• 🔍 حسابرسی\n"
@@ -825,7 +845,7 @@ async def ai_assistant(
         "• 📊 اکسل و Power Query در حسابداری\n"
         "• 💼 سایر موضوعات مرتبط با حسابداری\n\n"
         "🖼️ امکان ارسال عکس سند، فاکتور یا مدرک حسابداری نیز فعال است.\n\n"
-        "اکنون پیام ارسال کنید.\n\n"
+        "اکنون پیام خود را ارسال کنید.\n\n"
         "🔙 برای خروج از این بخش، گزینه «بازگشت» را انتخاب کنید.",
         reply_markup=create_keyboard(keyboard),
     )
@@ -985,6 +1005,7 @@ def _is_legal_question(text: str) -> bool:
     ]
 
     for keyword in keywords:
+
         keyword_normalized = _normalize_for_match(
             keyword
         )
@@ -1003,7 +1024,11 @@ def _is_legal_question(text: str) -> bool:
     ]
 
     for pattern in year_patterns:
-        if re.search(pattern, text):
+
+        if re.search(
+            pattern,
+            text
+        ):
             return True
 
     return False
@@ -1014,6 +1039,7 @@ def _is_legal_question(text: str) -> bool:
 # =========================================================
 
 def _extract_output_text(response) -> str:
+
     text = (
         getattr(
             response,
@@ -1029,6 +1055,7 @@ def _extract_output_text(response) -> str:
     collected = []
 
     try:
+
         for item in (
             getattr(
                 response,
@@ -1037,6 +1064,7 @@ def _extract_output_text(response) -> str:
             )
             or []
         ):
+
             if getattr(
                 item,
                 "type",
@@ -1052,6 +1080,7 @@ def _extract_output_text(response) -> str:
                 )
                 or []
             ):
+
                 content_text = getattr(
                     content,
                     "text",
@@ -1064,6 +1093,7 @@ def _extract_output_text(response) -> str:
                     )
 
     except Exception as e:
+
         print(
             f"OUTPUT TEXT EXTRACTION WARNING: {e}"
         )
@@ -1078,10 +1108,12 @@ def _extract_output_text(response) -> str:
 # =========================================================
 
 def _collect_source_urls(response):
+
     citations = []
     seen = set()
 
     try:
+
         for item in (
             getattr(
                 response,
@@ -1090,6 +1122,7 @@ def _collect_source_urls(response):
             )
             or []
         ):
+
             for content in (
                 getattr(
                     item,
@@ -1098,6 +1131,7 @@ def _collect_source_urls(response):
                 )
                 or []
             ):
+
                 for annotation in (
                     getattr(
                         content,
@@ -1106,6 +1140,7 @@ def _collect_source_urls(response):
                     )
                     or []
                 ):
+
                     url = getattr(
                         annotation,
                         "url",
@@ -1132,6 +1167,7 @@ def _collect_source_urls(response):
                     )
 
     except Exception as e:
+
         print(
             f"SOURCE EXTRACTION WARNING: {e}"
         )
@@ -1145,42 +1181,36 @@ def _collect_source_urls(response):
 
 def _remove_empty_citations(text: str) -> str:
 
-    # حذف پرانتزهای خالی
     text = re.sub(
         r"\(\s*\)",
         "",
         text
     )
 
-    # حذف براکت‌های خالی
     text = re.sub(
         r"\[\s*\]",
         "",
         text
     )
 
-    # حذف ارجاعات عددی ساده مثل [1] یا [2]
     text = re.sub(
         r"\[\s*\d+\s*\]",
         "",
         text
     )
 
-    # حذف ارجاعاتی مانند ()
     text = re.sub(
         r"\(\s*[\.,;:]*\s*\)",
         "",
         text
     )
 
-    # حذف فاصله قبل از علائم نگارشی
     text = re.sub(
         r"\s+([،؛,:.!؟])",
         r"\1",
         text
     )
 
-    # حذف خطوطی که فقط از citation خالی تشکیل شده‌اند
     text = re.sub(
         r"(?m)^\s*[\(\)\[\]]+\s*$",
         "",
@@ -1199,13 +1229,11 @@ def _clean_ai_text(text: str) -> str:
     if not text:
         return ""
 
-    # حذف code fence
     text = text.replace(
         "```",
         ""
     )
 
-    # حذف Markdown bold
     text = re.sub(
         r"\*\*(.*?)\*\*",
         r"\1",
@@ -1213,7 +1241,6 @@ def _clean_ai_text(text: str) -> str:
         flags=re.S
     )
 
-    # حذف Markdown italic
     text = re.sub(
         r"\*(.*?)\*",
         r"\1",
@@ -1221,40 +1248,34 @@ def _clean_ai_text(text: str) -> str:
         flags=re.S
     )
 
-    # حذف Markdown heading
     text = re.sub(
         r"(?m)^\s*#{1,6}\s*",
         "",
         text
     )
 
-    # تبدیل bulletهای Markdown به bullet تلگرام
     text = re.sub(
         r"(?m)^\s*[-*]\s+",
         "• ",
         text
     )
 
-    # حذف لینک Markdown
     text = re.sub(
         r"\[(.*?)\]\(https?://[^)]+\)",
         r"\1",
         text
     )
 
-    # حذف URL خام
     text = re.sub(
         r"https?://\S+",
         "",
         text
     )
 
-    # حذف citationهای خالی و عددی
     text = _remove_empty_citations(
         text
     )
 
-    # حذف چند خط خالی پشت سر هم
     text = re.sub(
         r"\n{3,}",
         "\n\n",
@@ -1270,62 +1291,48 @@ def _clean_ai_text(text: str) -> str:
 
 def _remove_source_links(text: str) -> str:
 
-    # =====================================================
-    # توجه:
-    # عمداً خطوط «منبع»، «منابع» و «مبنای قانونی» حذف نمی‌شوند.
-    # بخش «مبنای قانونی» باید برای سؤال‌های قانونی باقی بماند.
-    # =====================================================
-
-    # حذف لینک‌های Markdown به همراه پرانتز آن
     text = re.sub(
         r"\[[^\]]*\]\(\s*https?://[^)]*\)",
         "",
         text
     )
 
-    # حذف URLهای خام
     text = re.sub(
         r"https?://\S+",
         "",
         text
     )
 
-    # حذف URLهایی که داخل پرانتز آمده‌اند
     text = re.sub(
         r"\(\s*https?://[^)]*\)",
         "",
         text
     )
 
-    # حذف citationهای عددی و براکتی رایج
     text = re.sub(
         r"\[\s*\d+(?:\s*[-,]\s*\d+)*\s*\]",
         "",
         text
     )
 
-    # حذف پرانتزهای خالی باقی‌مانده
     text = re.sub(
         r"\(\s*\)",
         "",
         text
     )
 
-    # حذف براکت‌های خالی باقی‌مانده
     text = re.sub(
         r"\[\s*\]",
         "",
         text
     )
 
-    # حذف فاصله اضافی قبل از علائم نگارشی
     text = re.sub(
         r"\s+([،؛,:.!؟])",
         r"\1",
         text
     )
 
-    # حذف خطوط خالی اضافه
     text = re.sub(
         r"\n{3,}",
         "\n\n",
@@ -1350,8 +1357,6 @@ async def _send_ai_answer(
         answer
     )
 
-    # هیچ URL یا citation قابل کلیکی نمایش داده نمی‌شود.
-    # اما «مبنای قانونی» حفظ می‌شود.
     answer = _remove_source_links(
         answer
     )
@@ -1361,10 +1366,6 @@ async def _send_ai_answer(
         or []
     )
 
-    # =====================================================
-    # حذف کامل URL و citation
-    # =====================================================
-
     answer = _remove_source_links(
         answer
     )
@@ -1373,15 +1374,9 @@ async def _send_ai_answer(
         answer
     )
 
-    # یک بار دیگر پس از پاک‌سازی Markdown،
-    # لینک‌ها و URLها را حذف کن.
     answer = _remove_source_links(
         answer
     )
-
-    # =====================================================
-    # طول پیام تلگرام
-    # =====================================================
 
     max_text_length = 3500
 
@@ -1404,12 +1399,15 @@ async def _send_ai_answer(
         )
 
         if edit_message is not None:
+
             await edit_message.edit_text(
                 rendered,
                 parse_mode="HTML",
                 disable_web_page_preview=True,
             )
+
         else:
+
             await message.reply_text(
                 rendered,
                 parse_mode="HTML",
@@ -1417,10 +1415,6 @@ async def _send_ai_answer(
             )
 
         return
-
-    # =====================================================
-    # پاسخ چندبخشی
-    # =====================================================
 
     if edit_message is not None:
 
@@ -1434,6 +1428,7 @@ async def _send_ai_answer(
         )
 
         for chunk in chunks[1:]:
+
             await message.reply_text(
                 html.escape(
                     chunk,
@@ -1446,6 +1441,7 @@ async def _send_ai_answer(
     else:
 
         for chunk in chunks:
+
             await message.reply_text(
                 html.escape(
                     chunk,
@@ -1523,26 +1519,21 @@ async def _request_ai(
         or legal_from_history
     )
 
-    # =====================================================
-    # تنظیم توکن
-    # =====================================================
-
     if legal:
+
         base_tokens = max(
             AI_MAX_OUTPUT_TOKENS_LEGAL,
             AI_MAX_OUTPUT_TOKENS
         )
+
     else:
+
         base_tokens = AI_MAX_OUTPUT_TOKENS
 
     base_tokens = min(
         base_tokens,
         AI_MAX_OUTPUT_TOKENS_HARD_CAP
     )
-
-    # =====================================================
-    # ساخت درخواست
-    # =====================================================
 
     def build_request(
         max_tokens,
@@ -1572,15 +1563,10 @@ async def _request_ai(
 
         return args
 
-    # =====================================================
-    # تلاش‌ها
-    # =====================================================
-
     attempts = []
 
     if legal:
 
-        # برای موضوعات قانونی ابتدا جست‌وجوی اجباری
         attempts = [
             {
                 "tokens": base_tokens,
@@ -1680,6 +1666,7 @@ async def _request_ai(
             attempt_answer
             and not cut_off
         ):
+
             break
 
         print(
@@ -1691,10 +1678,6 @@ async def _request_ai(
             f"empty="
             f"{not attempt_answer}"
         )
-
-    # =====================================================
-    # اگر پاسخ دریافت نشد
-    # =====================================================
 
     if not answer:
 
@@ -1714,10 +1697,6 @@ async def _request_ai(
             [],
         )
 
-    # =====================================================
-    # ذخیره تاریخچه
-    # =====================================================
-
     history.append(
         {
             "role": "user",
@@ -1736,15 +1715,11 @@ async def _request_ai(
         }
     )
 
-    # نگه داشتن آخرین پیام‌ها
     if len(history) > AI_HISTORY_MESSAGES:
+
         del history[
             :-AI_HISTORY_MESSAGES
         ]
-
-    # منابع و لینک‌ها به کاربر نمایش داده نمی‌شوند.
-    # اگر سؤال قانونی باشد، خود مدل بر اساس جست‌وجوی انجام‌شده
-    # مشخصات کوتاه «مبنای قانونی» را در متن پاسخ قرار می‌دهد.
 
     return (
         answer,
@@ -1771,25 +1746,13 @@ async def ask_ai(
     # کنترل عضویت قبل از هر سؤال متنی
     # =====================================================
 
-    is_member = await is_channel_member(
+    is_member = await ensure_ai_membership(
         update,
         context
     )
 
     if not is_member:
-
-        context.user_data["ai_mode"] = False
-        context.user_data["channel_membership_verified"] = False
-
-        await request_channel_membership(
-            update,
-            context,
-            from_ai=True,
-        )
-
         return
-
-    context.user_data["channel_membership_verified"] = True
 
     user_question = (
         update.message.text
@@ -1879,25 +1842,13 @@ async def ask_ai_image(
     # کنترل عضویت قبل از هر تصویر
     # =====================================================
 
-    is_member = await is_channel_member(
+    is_member = await ensure_ai_membership(
         update,
         context
     )
 
     if not is_member:
-
-        context.user_data["ai_mode"] = False
-        context.user_data["channel_membership_verified"] = False
-
-        await request_channel_membership(
-            update,
-            context,
-            from_ai=True,
-        )
-
         return
-
-    context.user_data["channel_membership_verified"] = True
 
     if (
         not OPENAI_API_KEY
@@ -1966,9 +1917,10 @@ async def ask_ai_image(
                 "اگر اطلاعات مؤثر کافی نیست، ابتدا سؤال "
                 "روشن‌کننده بپرس. اگر موضوع تصویر به قانون "
                 "یا مقررات جاری مربوط است، Web Search انجام بده. "
-                "در صورت قانونی بودن موضوع، در انتهای پاسخ "
-                "بخش بسیار کوتاه «📌 مبنای قانونی» را با "
-                "شماره ماده، بخشنامه یا مقرره قابل‌تأیید "
+                "تمام قوانین، قانون بودجه، تبصره‌ها، بخشنامه‌ها، "
+                "آیین‌نامه‌ها و دستورالعمل‌های مرتبط را کنترل کن. "
+                "در انتهای پاسخ قانونی بخش بسیار کوتاه "
+                "«📌 مبنای قانونی» را با مستندات قابل‌تأیید "
                 "ارائه کن و هیچ لینکی نمایش نده."
             )
 
@@ -2362,7 +2314,7 @@ async def excel_intermediate(
 
     await update.message.reply_text(
         "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل\n\n"
-        "برای مشاهده ویدئوهای آموزشی، "
+        "برای مشاهده قسمت‌های دوره، "
         "گزینه زیر را انتخاب کنید:",
         reply_markup=create_keyboard(
             keyboard
@@ -2370,84 +2322,98 @@ async def excel_intermediate(
     )
 
 
+# =========================================================
+# اطلاعات ۹ قسمت نیمه پیشرفته
+# =========================================================
+
+INTERMEDIATE_LESSONS = [
+    {
+        "section": "قسمت اول",
+        "topic": "تابع Concatenate در اکسل",
+        "url": "https://my.uupload.ir/p/0jka5XvR",
+    },
+    {
+        "section": "قسمت دوم",
+        "topic": "تابع Textjoin در نرم افزار اکسل",
+        "url": "https://my.uupload.ir/p/2KDmGQDB",
+    },
+    {
+        "section": "قسمت سوم",
+        "topic": "تابع If و ترکیب آن با تابع Textjoin در نرم افزار اکسل",
+        "url": "https://my.uupload.ir/p/n2JGpEwK",
+    },
+    {
+        "section": "قسمت چهارم",
+        "topic": "تابع And و ترکیب آن با تابع If در نرم افزار اکسل",
+        "url": "https://my.uupload.ir/p/BvxABejW",
+    },
+    {
+        "section": "قسمت پنجم",
+        "topic": "تابع Or و ترکیب آن با تابع If در نرم افزار اکسل",
+        "url": "https://my.uupload.ir/p/JgwO5yWN",
+    },
+    {
+        "section": "قسمت ششم",
+        "topic": "تابع Xlookup در نرم افزار اکسل",
+        "url": "https://my.uupload.ir/p/ODwN9w42",
+    },
+    {
+        "section": "قسمت هفتم",
+        "topic": "تابع Sumifs در نرم افزار اکسل",
+        "url": "https://my.uupload.ir/p/1LdxaM00",
+    },
+    {
+        "section": "قسمت هشتم",
+        "topic": "تابع Vlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
+        "url": "https://my.uupload.ir/p/aG5a79xw",
+    },
+    {
+        "section": "قسمت نهم (قسمت آخر)",
+        "topic": "تابع Hlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
+        "url": "https://my.uupload.ir/p/eyJLaKYX",
+    },
+]
+
+
+# =========================================================
+# نمایش لینک‌های ۹ قسمت نیمه پیشرفته
+# =========================================================
+
 async def excel_intermediate_download(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    # =====================================================
-    # مهم:
-    # menu_level عمداً همان excel_intermediate باقی می‌ماند
-    # تا با یک بار «بازگشت» مستقیماً به صفحه قبل برگردد.
-    # =====================================================
-
     context.user_data[
         "menu_level"
-    ] = "excel_intermediate"
+    ] = "excel_intermediate_download"
 
-    video_buttons = [
-        [
-            InlineKeyboardButton(
-                "تابع Concatenate در اکسل",
-                url="https://my.uupload.ir/p/0jka5XvR",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "تابع Textjoin در نرم افزار اکسل",
-                url="https://my.uupload.ir/p/2KDmGQDB",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "تابع If و ترکیب آن با تابع Textjoin در نرم افزار اکسل",
-                url="https://my.uupload.ir/p/n2JGpEwK",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "تابع And و ترکیب آن با تابع If در نرم افزار اکسل",
-                url="https://my.uupload.ir/p/BvxABejW",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "تابع Or و ترکیب آن با تابع If در نرم افزار اکسل",
-                url="https://my.uupload.ir/p/JgwO5yWN",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "تابع Xlookup در نرم افزار اکسل",
-                url="https://my.uupload.ir/p/ODwN9w42",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "تابع Sumifs در نرم افزار اکسل",
-                url="https://my.uupload.ir/p/1LdxaM00",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "تابع Vlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
-                url="https://my.uupload.ir/p/aG5a79xw",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "تابع Hlookup و تفاوت آن با تابع Xlookup در نرم افزار اکسل",
-                url="https://my.uupload.ir/p/eyJLaKYX",
-            )
-        ],
-    ]
+    inline_keyboard = []
+
+    for lesson in INTERMEDIATE_LESSONS:
+
+        button_text = (
+            f"{lesson['section']}\n"
+            f"{lesson['topic']}"
+        )
+
+        inline_keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=button_text,
+                    url=lesson["url"],
+                )
+            ]
+        )
+
+    reply_markup = InlineKeyboardMarkup(
+        inline_keyboard
+    )
 
     await update.message.reply_text(
         "📘 ویدئوهای آموزشی نیمه پیشرفته اکسل\n\n"
-        "موضوع مورد نظر خود را انتخاب کنید:",
-        reply_markup=InlineKeyboardMarkup(
-            video_buttons
-        ),
+        "برای مشاهده هر قسمت، موضوع مورد نظر را انتخاب کنید:",
+        reply_markup=reply_markup,
     )
 
 
@@ -2534,6 +2500,15 @@ async def back(
             context
         )
 
+    elif level == "excel_intermediate_download":
+
+        # بازگشت اول:
+        # از فهرست ۹ قسمت به صفحه نیمه پیشرفته
+        await excel_intermediate(
+            update,
+            context
+        )
+
     else:
 
         await start(
@@ -2590,32 +2565,6 @@ app.add_handler(
     CommandHandler(
         "start",
         start
-    )
-)
-
-
-# =========================================================
-# بررسی عضویت کانال
-# =========================================================
-
-app.add_handler(
-    MessageHandler(
-        filters.StatusUpdate.NEW_CHAT_MEMBERS,
-        lambda update, context: None,
-    )
-)
-
-
-# =========================================================
-# بررسی عضویت از طریق دکمه
-# =========================================================
-
-from telegram.ext import CallbackQueryHandler
-
-app.add_handler(
-    CallbackQueryHandler(
-        check_channel_membership_callback,
-        pattern="^check_channel_membership$",
     )
 )
 
