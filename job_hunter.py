@@ -122,6 +122,76 @@ HEADLESS_CANDIDATE_SITES = {"divar", "jobvision", "karboom", "irantalent"}
 JS_SHELL_TEXT_LENGTH_THRESHOLD = 400
 
 
+def _normalize_fa(text):
+    if not text:
+        return ""
+    replacements = {
+        "ي": "ی", "ى": "ی", "ك": "ک", "أ": "ا", "إ": "ا",
+        "آ": "ا", "ة": "ه", "ؤ": "و", "ئ": "ی", "ۀ": "ه",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+
+def normalize_city_name(name):
+    """
+    برای مقایسه دو نام شهر (مثلا شهری که کاربر تایپ کرده با شهری
+    که از آگهی استخراج شده)، فاصله و نیم‌فاصله و حروف عربی/فارسی
+    را یکسان می‌کند. توجه: غلط‌های املایی را تشخیص نمی‌دهد.
+    """
+    if not name:
+        return ""
+    text = _normalize_fa(name)
+    text = text.replace("\u200c", "").replace(" ", "")
+    return text.strip()
+
+
+# فهرست شهرهای بزرگ و مراکز استان ایران، برای تشخیص شهر آگهی از
+# روی متن اطراف لینک آن. مرتب‌شده از طولانی به کوتاه تا نام‌های
+# ترکیبی (مثل «شهر ری») زودتر از نام‌های کوتاه‌تر تشخیص داده شوند.
+IRAN_CITIES = sorted(
+    [
+        "تهران", "مشهد", "اصفهان", "کرج", "شیراز", "تبریز", "قم",
+        "اهواز", "کرمانشاه", "ارومیه", "رشت", "زاهدان", "همدان",
+        "یزد", "اردبیل", "بندرعباس", "اراک", "کرمان", "قزوین",
+        "زنجان", "سنندج", "خرم‌آباد", "خرم آباد", "گرگان", "ساری",
+        "بجنورد", "بوشهر", "بیرجند", "ایلام", "شهرکرد", "یاسوج",
+        "سمنان", "شهریار", "اسلامشهر", "پاکدشت", "ورامین",
+        "نجف‌آباد", "خمینی‌شهر", "کاشان", "سبزوار", "نیشابور",
+        "قائم‌شهر", "بابل", "آمل", "دزفول", "بروجرد", "خرمشهر",
+        "آبادان", "ماهشهر", "نوشهر", "چالوس", "رامسر", "لاهیجان",
+        "بندر انزلی", "انزلی", "میاندوآب", "مراغه", "خوی", "مرند",
+        "سقز", "بانه", "مهاباد", "ایرانشهر", "چابهار", "جهرم",
+        "کازرون", "مرودشت", "لار", "فسا", "نی‌ریز", "رفسنجان",
+        "سیرجان", "جیرفت", "بم", "زابل", "شاهرود", "دامغان",
+        "گناباد", "تربت حیدریه", "تربت جام", "قوچان", "کرج",
+        "پرند", "ملارد", "رباط کریم", "قدس", "شهر ری", "ری",
+        "پردیس", "دماوند", "فیروزکوه",
+    ],
+    key=len,
+    reverse=True,
+)
+
+
+def _detect_city_in_text(text):
+    """
+    اگر یکی از نام‌های فهرست IRAN_CITIES داخل متن باشد، همان را
+    برمی‌گرداند. برای شهرهایی که در فهرست نیستند، None برمی‌گرداند
+    (این تشخیص کامل نیست، فقط برای شهرهای بزرگ و پرکاربرد است).
+    """
+    if not text:
+        return None
+
+    normalized = _normalize_fa(text)
+
+    for city in IRAN_CITIES:
+        if _normalize_fa(city) in normalized:
+            return city
+
+    return None
+
+
 # =========================================================
 # ابزارهای کمکی HTTP
 # =========================================================
@@ -192,15 +262,14 @@ def _fetch_html_with_fallback(site_name, url, headless_session=None):
     return html_content
 
 
-def _discover_candidate_links(html_content, base_url, limit=10):
+def _discover_candidate_links_with_context(html_content, base_url, limit=10):
     """
-    به‌جای وابستگی به ساختار دقیق هر سایت (که مدام تغییر می‌کند)،
-    از یک اکتشاف عمومی استفاده می‌کنیم: هر لینکی که در مسیر یا
-    متنش نشانه «آگهی شغلی» دارد را کاندید می‌کنیم. اعتبارسنجی
-    نهایی این‌که آیا واقعا یک آگهی استخدام حسابداری/مالی است یا
-    نه، بعدا با کمک هوش مصنوعی روی متن خود صفحه انجام می‌شود.
+    مثل _discover_candidate_links اما به‌ازای هر لینک، کمی از متن
+    اطراف آن (والدش در HTML) را هم برمی‌گرداند تا بشود از روی آن
+    نام شهر آگهی را حدس زد (خیلی از سایت‌ها نام شهر را همان کنار
+    عنوان آگهی می‌نویسند، مثلا «استخدام حسابدار (تبریز)»).
     """
-    candidates = []
+    results = []
     seen = set()
 
     try:
@@ -226,15 +295,40 @@ def _discover_candidate_links(html_content, base_url, limit=10):
                 continue
 
             seen.add(full_url)
-            candidates.append(full_url)
 
-            if len(candidates) >= limit:
+            context_text = text
+
+            try:
+                parent = a.find_parent(["li", "div", "article"])
+                if parent:
+                    parent_text = parent.get_text(separator=" ", strip=True)
+                    if parent_text:
+                        context_text = parent_text[:300]
+            except Exception:
+                pass
+
+            results.append({"url": full_url, "context": context_text})
+
+            if len(results) >= limit:
                 break
 
     except Exception as e:
         print(f"JOB SCRAPER LINK DISCOVERY ERROR: {e}")
 
-    return candidates
+    return results
+
+
+def _discover_candidate_links(html_content, base_url, limit=10):
+    """
+    نسخه ساده که فقط URLها را برمی‌گرداند (برای جاهایی که نیازی
+    به متن اطراف لینک نیست).
+    """
+    return [
+        item["url"]
+        for item in _discover_candidate_links_with_context(
+            html_content, base_url, limit
+        )
+    ]
 
 
 # =========================================================
@@ -624,33 +718,37 @@ def pick_quiz_questions(all_questions, total=QUIZ_QUESTION_COUNT):
 # جست‌وجوی زنده آگهی متناسب با توانایی کاربر (بدون فراخوانی AI)
 # =========================================================
 
-def find_live_jobs_for_topics(topics, city=None, per_topic_limit=3, log=print):
+def find_live_jobs_grouped_by_city(topics, per_topic_limit=6, log=print):
     """
     برای موضوعاتی که کاربر در آن‌ها موفق بوده، به‌صورت زنده در
-    چند سایت اصلی جست‌وجو می‌کند و لینک آگهی‌های واقعی را برمی‌گرداند.
-    این تابع هیچ فراخوانی هوش مصنوعی ندارد و هزینه‌ای ندارد.
+    چند سایت اصلی جست‌وجو می‌کند، برای هر آگهی پیدا‌شده تلاش
+    می‌کند نام شهر آن را از روی متن اطراف لینک تشخیص دهد، و در
+    نهایت یک لیست از آگهی‌ها را برمی‌گرداند که هرکدام شامل
+    {url, city, topic} است. این تابع هیچ فراخوانی هوش مصنوعی
+    ندارد و هزینه‌ای ندارد؛ فقط از HTTP ساده (و در صورت فعال بودن،
+    مرورگر headless) استفاده می‌کند.
+
+    گروه‌بندی بر اساس شهر خود این تابع را انجام نمی‌دهد؛ از تابع
+    group_pool_by_city برای آن استفاده کنید.
     """
 
-    results = {}
-
-    # برای جست‌وجوی لحظه‌ای، دیوار/جاب‌ویژن/کاربوم/ایران‌تلنت هم به
-    # فهرست اضافه می‌شوند تا اگر headless فعال باشد از آن‌ها هم
-    # نتیجه بگیریم؛ اگر headless فعال نباشد این سایت‌ها به‌طور
-    # طبیعی نتیجه کمی می‌دهند و مشکلی پیش نمی‌آید.
     quick_sites = [
         "jobinja", "e-estekhdam", "iranestekhdam",
         "divar", "jobvision", "karboom", "irantalent",
     ]
 
+    pool = []
+    seen_urls = set()
+
     with job_hunter_headless.HeadlessSession() as headless_session:
 
         for topic in topics:
 
-            found_links = []
+            count_for_topic = 0
 
             for site_name in quick_sites:
 
-                if len(found_links) >= per_topic_limit:
+                if count_for_topic >= per_topic_limit:
                     break
 
                 builder = SITE_SEARCH_BUILDERS.get(site_name)
@@ -669,16 +767,44 @@ def find_live_jobs_for_topics(topics, city=None, per_topic_limit=3, log=print):
                 if not html_content:
                     continue
 
-                links = _discover_candidate_links(
+                candidates = _discover_candidate_links_with_context(
                     html_content, search_url, limit=per_topic_limit
                 )
 
-                for link in links:
-                    if link not in found_links:
-                        found_links.append(link)
-                    if len(found_links) >= per_topic_limit:
+                for item in candidates:
+
+                    url = item["url"]
+
+                    if url in seen_urls:
+                        continue
+
+                    seen_urls.add(url)
+
+                    city = _detect_city_in_text(item["context"]) or "سایر شهرها"
+
+                    pool.append(
+                        {"url": url, "city": city, "topic": topic}
+                    )
+
+                    count_for_topic += 1
+
+                    if count_for_topic >= per_topic_limit:
                         break
 
-            results[topic] = found_links
+    log(f"JOB: live search found {len(pool)} postings across {len(topics)} topics")
 
-    return results
+    return pool
+
+
+def group_pool_by_city(pool):
+    """
+    فهرست تخت آگهی‌ها را به دیکشنری {نام شهر: [آگهی‌ها]} تبدیل
+    می‌کند تا بشود اول شهر خود کاربر و بعد سایر شهرها را نشان داد.
+    """
+
+    by_city = {}
+
+    for item in pool:
+        by_city.setdefault(item["city"], []).append(item)
+
+    return by_city
