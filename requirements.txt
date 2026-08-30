@@ -1,2 +1,4 @@
-python-telegram-bot[webhooks]
-openai
+python-telegram-bot[job-queue]==21.6
+openai>=1.40.0
+beautifulsoup4
+requests
