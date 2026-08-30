@@ -1,4 +1,5 @@
 import os
+import asyncio
 import base64
 import html
 import re
@@ -15,6 +16,7 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     filters,
 )
@@ -823,6 +825,18 @@ LEGAL_RESEARCH_INSTRUCTION = """
 
 
 # =========================================================
+# ماژول استخدام‌یاب هوشمند (جدید)
+# =========================================================
+
+import job_hunter
+
+
+JOB_ADMIN_USER_ID = os.getenv("JOB_ADMIN_USER_ID")
+
+JOB_MENU_BUTTON = "🎯 استخدام‌یاب هوشمند"
+
+
+# =========================================================
 # ساخت کیبورد
 # =========================================================
 
@@ -975,10 +989,13 @@ async def start(
 ):
     context.user_data["menu_level"] = "main"
     context.user_data["ai_mode"] = False
+    context.user_data["job_flow"] = None
+    context.user_data["job_quiz"] = None
 
     keyboard = [
         ["🎓 دوره‌های آموزشی", "🎬 ویدئوهای آموزشی"],
         ["🤖 دستیار هوش مصنوعی"],
+        [JOB_MENU_BUTTON],
         ["📱 ارتباط با ما"],
     ]
 
@@ -2003,6 +2020,21 @@ async def ask_ai(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+    # =====================================================
+    # اگر کاربر در حال طی‌کردن مراحل استخدام‌یاب هوشمند است
+    # (نام/شهر/سن) این پیام متنی باید به آن بخش هدایت شود، نه
+    # به دستیار هوش مصنوعی حسابداری.
+    # =====================================================
+
+    if context.user_data.get("job_flow"):
+
+        await job_flow_text(
+            update,
+            context
+        )
+
+        return
+
     if not context.user_data.get(
         "ai_mode",
         False
@@ -2723,6 +2755,16 @@ async def back(
             context
         )
 
+    elif level == "job":
+
+        context.user_data["job_flow"] = None
+        context.user_data["job_quiz"] = None
+
+        await start(
+            update,
+            context
+        )
+
     elif level in [
         "in_person_courses",
         "online_courses",
@@ -2826,6 +2868,482 @@ async def download_links(
 
 
 # =========================================================
+# =========================================================
+#
+#   بخش جدید: استخدام‌یاب هوشمند
+#
+#   جریان کار:
+#   ۱. کاربر روی «🎯 استخدام‌یاب هوشمند» می‌زند.
+#   ۲. نام، شهر، سن و جنسیت گرفته می‌شود.
+#   ۳. ۲۰ سؤال تصادفی و متنوع (از موضوعات مختلف) از بانک سؤالی
+#      که هر ماه از روی آگهی‌های واقعی ساخته شده می‌پرسد.
+#   ۴. پاسخ‌ها تصحیح و به تفکیک موضوع نمره‌دهی می‌شود.
+#   ۵. برای موضوعاتی که کاربر بالای ۸۰٪ درست پاسخ داده، به‌صورت
+#      زنده در سایت‌های کاریابی جست‌وجو و لینک آگهی واقعی ارسال
+#      می‌شود.
+#
+# =========================================================
+# =========================================================
+
+async def job_hunter_entry(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    bank = job_hunter.load_question_bank()
+
+    if not bank:
+
+        await update.message.reply_text(
+            "⚠️ بانک سؤال استخدام‌یاب هنوز آماده نشده است.\n"
+            "این بخش هر ماه به‌صورت خودکار از روی آگهی‌های واقعی "
+            "استخدام حسابداری در سایت‌های کاریابی معتبر ساخته "
+            "می‌شود. لطفاً کمی بعد دوباره تلاش کنید.",
+            reply_markup=create_keyboard(
+                [["🏠 منوی اصلی"]]
+            ),
+        )
+
+        return
+
+    context.user_data["menu_level"] = "job"
+    context.user_data["ai_mode"] = False
+    context.user_data["job_quiz"] = None
+
+    context.user_data["job_flow"] = "name"
+    context.user_data["job_profile"] = {}
+
+    await update.message.reply_text(
+        "🎯 استخدام‌یاب هوشمند حسابداری\n\n"
+        "این بخش بر اساس آگهی‌های واقعی استخدام حسابدار، حسابدار "
+        "ارشد، مدیر مالی، رئیس حسابداری و حسابرس در سایت‌های "
+        "کاریابی معتبر ایران ساخته شده است.\n\n"
+        "ابتدا چند سؤال کوتاه از شما می‌پرسم، سپس ۲۰ سؤال تخصصی "
+        "از موضوعات مختلف مطرح می‌شود. در پایان، بر اساس مباحثی "
+        "که در آن‌ها بالای ۸۰٪ موفق بوده‌اید، آگهی‌های استخدام "
+        "واقعی و مرتبط برایتان ارسال می‌شود.\n\n"
+        "لطفاً نام خود را وارد کنید:",
+        reply_markup=create_keyboard(
+            [["🔙 بازگشت"]]
+        ),
+    )
+
+
+async def job_flow_text(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    step = context.user_data.get("job_flow")
+
+    if not step:
+        return
+
+    text = (update.message.text or "").strip()[:100]
+
+    profile = context.user_data.setdefault(
+        "job_profile", {}
+    )
+
+    if step == "name":
+
+        if not text:
+            await update.message.reply_text("لطفاً نام خود را وارد کنید:")
+            return
+
+        profile["name"] = text
+        context.user_data["job_flow"] = "city"
+
+        await update.message.reply_text(
+            f"خوشحالم {text} عزیز 🌱\n\nشهر محل سکونت شما؟"
+        )
+
+        return
+
+    if step == "city":
+
+        if not text:
+            await update.message.reply_text("لطفاً نام شهر را وارد کنید:")
+            return
+
+        profile["city"] = text
+        context.user_data["job_flow"] = "age"
+
+        await update.message.reply_text("سن شما؟ (فقط عدد)")
+
+        return
+
+    if step == "age":
+
+        if not text.isdigit() or not (14 <= int(text) <= 80):
+            await update.message.reply_text(
+                "لطفاً سن را به‌صورت عدد و منطقی وارد کنید (مثلاً 28):"
+            )
+            return
+
+        profile["age"] = int(text)
+        context.user_data["job_flow"] = "gender"
+
+        inline_keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("مرد", callback_data="jgender|مرد"),
+                    InlineKeyboardButton("زن", callback_data="jgender|زن"),
+                ]
+            ]
+        )
+
+        await update.message.reply_text(
+            "جنسیت شما؟",
+            reply_markup=inline_keyboard,
+        )
+
+        return
+
+    # در مرحله quiz دیگر متن آزاد پذیرفته نمی‌شود؛ کاربر باید از
+    # دکمه‌های زیر سؤال استفاده کند.
+    if step == "quiz":
+
+        await update.message.reply_text(
+            "لطفاً برای پاسخ به سؤال از دکمه‌های زیر همان سؤال "
+            "استفاده کنید."
+        )
+
+        return
+
+
+async def job_gender_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    query = update.callback_query
+    await query.answer()
+
+    if context.user_data.get("job_flow") != "gender":
+        return
+
+    gender = query.data.split("|", 1)[1]
+
+    profile = context.user_data.setdefault("job_profile", {})
+    profile["gender"] = gender
+
+    bank = job_hunter.load_question_bank()
+
+    quiz_questions = job_hunter.pick_quiz_questions(bank)
+
+    if not quiz_questions:
+
+        await query.edit_message_text(
+            "⚠️ در حال حاضر سؤال کافی برای آزمون وجود ندارد."
+        )
+
+        context.user_data["job_flow"] = None
+
+        return
+
+    context.user_data["job_quiz"] = {
+        "questions": quiz_questions,
+        "idx": 0,
+        "topic_stats": {},
+    }
+
+    context.user_data["job_flow"] = "quiz"
+
+    await query.edit_message_text(
+        f"ممنون {profile.get('name', '')} 🙏\n\n"
+        f"شهر: {profile.get('city', '-')}\n"
+        f"سن: {profile.get('age', '-')}\n"
+        f"جنسیت: {gender}\n\n"
+        "حالا ۲۰ سؤال تخصصی مطرح می‌کنم. برای هر سؤال روی گزینه "
+        "درست بزنید."
+    )
+
+    await _send_job_question(
+        update.effective_chat.id,
+        context,
+    )
+
+
+def _build_question_keyboard(qidx, options):
+
+    buttons = []
+
+    for i, option in enumerate(options):
+
+        label = f"{chr(65 + i)}. {option}"[:60]
+
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    label,
+                    callback_data=f"jans|{qidx}|{i}",
+                )
+            ]
+        )
+
+    return InlineKeyboardMarkup(buttons)
+
+
+async def _send_job_question(chat_id, context):
+
+    quiz = context.user_data.get("job_quiz")
+
+    if not quiz:
+        return
+
+    idx = quiz["idx"]
+    questions = quiz["questions"]
+
+    if idx >= len(questions):
+
+        await _finish_job_quiz(chat_id, context)
+
+        return
+
+    q = questions[idx]
+
+    text = (
+        f"سؤال {idx + 1} از {len(questions)}\n"
+        f"موضوع: {q['topic']}\n\n"
+        f"{q['question']}"
+    )
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=_build_question_keyboard(
+            idx, q["options"]
+        ),
+    )
+
+
+async def job_quiz_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    query = update.callback_query
+    await query.answer()
+
+    quiz = context.user_data.get("job_quiz")
+
+    if not quiz:
+        return
+
+    try:
+        _, qidx_str, optidx_str = query.data.split("|")
+        qidx = int(qidx_str)
+        optidx = int(optidx_str)
+    except Exception:
+        return
+
+    if qidx != quiz["idx"]:
+        # این سؤال قبلا پاسخ داده شده یا نامعتبر است
+        return
+
+    questions = quiz["questions"]
+    q = questions[qidx]
+
+    is_correct = (optidx == q["correct_index"])
+
+    stats = quiz["topic_stats"].setdefault(
+        q["topic"], {"correct": 0, "total": 0}
+    )
+
+    stats["total"] += 1
+
+    if is_correct:
+        stats["correct"] += 1
+
+    correct_option_text = q["options"][q["correct_index"]]
+
+    if is_correct:
+        result_line = "✅ پاسخ درست بود."
+    else:
+        result_line = f"❌ پاسخ درست نبود.\nپاسخ صحیح: {correct_option_text}"
+
+    try:
+        await query.edit_message_text(
+            f"سؤال {qidx + 1}: {q['question']}\n\n{result_line}"
+        )
+    except Exception:
+        pass
+
+    quiz["idx"] += 1
+
+    await _send_job_question(
+        update.effective_chat.id,
+        context,
+    )
+
+
+async def _finish_job_quiz(chat_id, context):
+
+    quiz = context.user_data.get("job_quiz")
+    profile = context.user_data.get("job_profile", {})
+
+    if not quiz:
+        return
+
+    topic_stats = quiz["topic_stats"]
+
+    lines = ["📊 نتیجه آزمون شما:\n"]
+
+    qualified_topics = []
+
+    for topic, stats in topic_stats.items():
+
+        total = stats["total"]
+        correct = stats["correct"]
+        percent = (correct / total * 100) if total else 0
+
+        lines.append(
+            f"• {topic}: {correct} از {total} ({percent:.0f}٪)"
+        )
+
+        if total > 0 and (correct / total) >= job_hunter.PASS_THRESHOLD:
+            qualified_topics.append(topic)
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="\n".join(lines),
+    )
+
+    context.user_data["job_flow"] = None
+    context.user_data["job_quiz"] = None
+
+    if not qualified_topics:
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "در این آزمون در هیچ موضوعی به آستانه ۸۰٪ نرسیدید. "
+                "پیشنهاد می‌کنم دوباره مطالعه کنید و بعدا دوباره "
+                "آزمون بدهید 🌱\n\n"
+                "برای بازگشت، «🏠 منوی اصلی» را بزنید."
+            ),
+            reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
+        )
+
+        return
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "🎉 در این موضوعات عملکرد خوبی داشتید:\n"
+            + "، ".join(qualified_topics)
+            + "\n\nدر حال جست‌وجوی آگهی‌های واقعی مرتبط..."
+        ),
+    )
+
+    city = profile.get("city")
+
+    try:
+        job_links = await asyncio.to_thread(
+            job_hunter.find_live_jobs_for_topics,
+            qualified_topics,
+            city,
+        )
+    except Exception as e:
+        print(f"JOB LIVE SEARCH ERROR: {e}")
+        job_links = {}
+
+    reply_lines = []
+
+    any_link_found = False
+
+    for topic in qualified_topics:
+
+        links = job_links.get(topic) or []
+
+        reply_lines.append(f"\n🔹 {topic}")
+
+        if not links:
+            reply_lines.append("  آگهی زنده‌ای در همین لحظه پیدا نشد.")
+            continue
+
+        any_link_found = True
+
+        for link in links:
+            reply_lines.append(f"  {link}")
+
+    if not any_link_found:
+        reply_lines.append(
+            "\nدر حال حاضر آگهی زنده‌ای پیدا نشد؛ لطفاً بعدا دوباره "
+            "امتحان کنید یا مستقیم در سایت‌های کاریابی جست‌وجو کنید."
+        )
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="\n".join(reply_lines),
+        reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
+        disable_web_page_preview=True,
+    )
+
+
+# =========================================================
+# دستور مدیریتی برای ساخت/به‌روزرسانی دستی بانک سؤال
+# =========================================================
+
+async def refresh_jobs_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    user = update.effective_user
+
+    if (
+        not JOB_ADMIN_USER_ID
+        or not user
+        or str(user.id) != str(JOB_ADMIN_USER_ID)
+    ):
+        return
+
+    if client is None:
+
+        await update.message.reply_text(
+            "⚠️ OPENAI_API_KEY تنظیم نشده است."
+        )
+
+        return
+
+    await update.message.reply_text(
+        "⏳ در حال جمع‌آوری آگهی‌های واقعی و ساخت بانک سؤال... "
+        "این کار ممکن است چند دقیقه طول بکشد."
+    )
+
+    # این عملیات (اسکرپ + احتمالا مرورگر headless + چند فراخوانی
+    # OpenAI) می‌تواند چند دقیقه طول بکشد؛ برای این‌که در این مدت
+    # کل ربات برای سایر کاربران قفل نشود، در یک ترد جداگانه اجرا
+    # می‌شود.
+    count = await asyncio.to_thread(
+        job_hunter.refresh_job_bank, client, print
+    )
+
+    if count:
+
+        await update.message.reply_text(
+            f"✅ بانک سؤال با {count} سؤال به‌روزرسانی شد."
+        )
+
+    else:
+
+        await update.message.reply_text(
+            "⚠️ ساخت بانک سؤال ناموفق بود. لاگ سرور را بررسی کنید."
+        )
+
+
+async def scheduled_job_refresh(context: ContextTypes.DEFAULT_TYPE):
+
+    if client is None:
+        print("JOB: OPENAI_API_KEY not set, skipping scheduled refresh")
+        return
+
+    await asyncio.to_thread(job_hunter.refresh_job_bank, client, print)
+
+
+# =========================================================
 # ساخت Application
 # =========================================================
 
@@ -2850,6 +3368,18 @@ app.add_handler(
 
 
 # =========================================================
+# دستور مدیریتی استخدام‌یاب
+# =========================================================
+
+app.add_handler(
+    CommandHandler(
+        "refresh_jobs",
+        refresh_jobs_command,
+    )
+)
+
+
+# =========================================================
 # هوش مصنوعی
 # =========================================================
 
@@ -2859,6 +3389,34 @@ app.add_handler(
             ["🤖 دستیار هوش مصنوعی"]
         ),
         ai_assistant,
+    )
+)
+
+
+# =========================================================
+# استخدام‌یاب هوشمند
+# =========================================================
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(
+            [JOB_MENU_BUTTON]
+        ),
+        job_hunter_entry,
+    )
+)
+
+app.add_handler(
+    CallbackQueryHandler(
+        job_gender_callback,
+        pattern=r"^jgender\|",
+    )
+)
+
+app.add_handler(
+    CallbackQueryHandler(
+        job_quiz_callback,
+        pattern=r"^jans\|",
     )
 )
 
@@ -3053,6 +3611,7 @@ app.add_handler(
 
 MENU_BUTTONS = [
     "🤖 دستیار هوش مصنوعی",
+    JOB_MENU_BUTTON,
     "🎓 دوره‌های آموزشی",
     "🎬 ویدئوهای آموزشی",
     "📱 ارتباط با ما",
@@ -3091,7 +3650,7 @@ app.add_handler(
 
 
 # =========================================================
-# پیام‌های متنی AI
+# پیام‌های متنی (AI و مراحل استخدام‌یاب)
 # =========================================================
 
 app.add_handler(
@@ -3104,6 +3663,38 @@ app.add_handler(
         ask_ai,
     )
 )
+
+
+# =========================================================
+# زمان‌بندی ماهانه به‌روزرسانی بانک سؤال استخدام‌یاب
+# =========================================================
+#
+# نیازمند نصب پکیج با اکستنشن job-queue است:
+#   pip install "python-telegram-bot[job-queue]"
+#
+# first=60 یعنی ۶۰ ثانیه بعد از بالا آمدن ربات یک‌بار اجرا می‌شود
+# (تا بانک سؤال خالی نماند)، سپس هر ۳۰ روز یک‌بار تکرار می‌شود.
+# توجه: اگر سرویس روی Render ری‌استارت شود، شمارش دوباره از صفر
+# شروع می‌شود. برای اطمینان کامل، از دستور دستی /refresh_jobs
+# هم می‌توانید استفاده کنید.
+# =========================================================
+
+if app.job_queue is not None:
+
+    app.job_queue.run_repeating(
+        scheduled_job_refresh,
+        interval=30 * 24 * 60 * 60,
+        first=60,
+    )
+
+else:
+
+    print(
+        "WARNING: JobQueue فعال نیست. برای زمان‌بندی خودکار ماهانه، "
+        "پکیج را با دستور زیر نصب کنید:\n"
+        "pip install \"python-telegram-bot[job-queue]\"\n"
+        "در غیر این صورت فقط از دستور دستی /refresh_jobs استفاده کنید."
+    )
 
 
 # =========================================================
