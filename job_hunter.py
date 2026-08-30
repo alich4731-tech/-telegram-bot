@@ -40,8 +40,9 @@ META_FILE = os.path.join(JOB_DATA_DIR, "job_meta.json")
 
 os.makedirs(JOB_DATA_DIR, exist_ok=True)
 
-# مدلی که برای استخراج و ساخت سؤال استفاده می‌شود (می‌توانید همان
-# AI_MODEL اصلی ربات یا مدل ارزان‌تر را از Environment ست کنید)
+# مدلی که فقط برای «استخراج الزامات از متن آگهی» استفاده می‌شود؛
+# این مرحله نیاز به جست‌وجوی وب ندارد (فقط همان متن صفحه را
+# می‌خواند)، پس یک مدل ارزان کافی است.
 JOB_AI_MODEL = os.getenv("JOB_AI_MODEL", "gpt-4o-mini")
 
 # چند آگهی از هر سایت به‌ازای هر عنوان شغلی بررسی شود
@@ -49,10 +50,44 @@ MAX_LISTINGS_PER_SITE_PER_ROLE = int(
     os.getenv("JOB_MAX_LISTINGS_PER_SITE", "6")
 )
 
-TOTAL_QUESTIONS_TARGET = 100
-QUIZ_QUESTION_COUNT = 20
+# تعداد سؤال ساخته‌شده برای مبحث‌هایی که در آگهی‌های زیادی دیده
+# شده‌اند (پرتقاضا) در برابر مبحث‌هایی که کم‌تر دیده شده‌اند.
+QUESTIONS_PER_TOPIC_HIGH = 10
+QUESTIONS_PER_TOPIC_LOW = 6
+HIGH_FREQUENCY_THRESHOLD = 3  # مبحث در حداقل ۳ آگهی جدا دیده شده باشد
+
+QUIZ_QUESTION_COUNT = 30
 MAX_QUESTIONS_PER_TOPIC_IN_QUIZ = 4
 PASS_THRESHOLD = 0.8  # ۸۰ درصد
+
+# =========================================================
+# فهرست ثابت مبحث‌های واقعاً فنیِ حسابداری/مالی/مالیاتی که قابل
+# آزمون‌گرفتن هستند. مرحله استخراج فقط اجازه دارد از همین فهرست
+# انتخاب کند (نه هر عبارت آزاد دیگری)، تا مبحث‌های بی‌ربط یا
+# غیرقابل‌آزمون مثل «سابقه کار» یا «روحیه کار تیمی» وارد بانک
+# سؤال نشوند. اگر خواستید، می‌توانید این فهرست را ویرایش کنید.
+# =========================================================
+
+CANONICAL_TOPICS = [
+    "ارزش افزوده و سامانه مؤدیان",
+    "مالیات عملکرد و اظهارنامه مالیاتی",
+    "حقوق و دستمزد و مزایای کارکنان",
+    "بیمه تأمین اجتماعی",
+    "قانون کار",
+    "استانداردهای حسابداری ایران",
+    "حسابداری صنعتی و بهای تمام‌شده",
+    "تهیه صورت‌های مالی",
+    "حسابرسی",
+    "اکسل و Power Query در حسابداری",
+    "نرم‌افزارهای حسابداری (مانند هلو، سپیدار، همکاران سیستم)",
+    "اسناد و ثبت‌های حسابداری روزانه",
+    "تراز آزمایشی و بستن حساب‌ها",
+    "مغایرت‌گیری بانکی",
+    "دارایی ثابت و استهلاک",
+    "خزانه‌داری و مدیریت نقدینگی",
+    "بودجه‌بندی و گزارش‌های مدیریتی",
+    "قراردادها و امور حقوقی مالی",
+]
 
 ROLE_KEYWORDS = [
     "حسابدار",
@@ -348,9 +383,19 @@ EXTRACT_PROMPT = """
 {{
   "is_job_ad": true یا false,
   "job_title": "عنوان شغلی آگهی",
-  "topics": ["موضوع۱", "موضوع۲"],
-  "requirements": ["الزام یا مهارت خواسته‌شده ۱", "الزام یا مهارت خواسته‌شده ۲"]
+  "technical_topics": ["مبحث۱", "مبحث۲"]
 }}
+
+برای technical_topics: فقط از میان مبحث‌های زیر انتخاب کن (دقیقاً همان
+عبارت را کپی کن) و فقط مبحث‌هایی را بگذار که واقعاً در متن آگهی به‌عنوان
+یکی از الزامات یا مهارت‌های مورد نیاز ذکر شده باشند:
+
+{canonical_topics_list}
+
+نکته مهم: مواردی مثل «سابقه کار»، «مدرک تحصیلی»، «روحیه کار تیمی»،
+«مهارت ارتباطی»، «حقوق توافقی»، «فرصت رشد شغلی» یا هر چیز دیگری که در
+فهرست بالا نیست را در technical_topics قرار نده، چون این‌ها مبحث دانش
+فنی قابل‌آزمون نیستند.
 
 اگر صفحه آگهی استخدام حسابداری/مالی مرتبط نیست، فقط
 {{"is_job_ad": false}}
@@ -361,29 +406,50 @@ EXTRACT_PROMPT = """
 """
 
 
-def _call_openai_json(client, prompt, max_tokens=1200):
+def _call_openai_json(client, model, prompt, max_tokens=1200, use_search=False):
+
     try:
-        resp = client.responses.create(
-            model=JOB_AI_MODEL,
-            input=[{"role": "user", "content": prompt}],
-            max_output_tokens=max_tokens,
-        )
+
+        args = {
+            "model": model,
+            "input": [{"role": "user", "content": prompt}],
+            "max_output_tokens": max_tokens,
+        }
+
+        if use_search:
+            args["tools"] = [
+                {"type": "web_search", "search_context_size": "low"}
+            ]
+
+        resp = client.responses.create(**args)
+
         text = (getattr(resp, "output_text", None) or "").strip()
         text = re.sub(r"^```json", "", text.strip())
         text = re.sub(r"^```", "", text.strip())
         text = re.sub(r"```$", "", text.strip())
         return json.loads(text)
+
     except Exception as e:
         print(f"JOB AI JSON CALL ERROR [{type(e).__name__}]: {e}")
         return None
 
 
+_CANONICAL_TOPICS_PROMPT_BLOCK = "\n".join(
+    f"- {t}" for t in CANONICAL_TOPICS
+)
+
+
 def _extract_requirements_from_page(client, page_text, source_url):
+
     if not page_text or len(page_text) < 80:
         return None
 
-    prompt = EXTRACT_PROMPT.format(page_text=page_text[:4000])
-    data = _call_openai_json(client, prompt, max_tokens=800)
+    prompt = EXTRACT_PROMPT.format(
+        page_text=page_text[:4000],
+        canonical_topics_list=_CANONICAL_TOPICS_PROMPT_BLOCK,
+    )
+
+    data = _call_openai_json(client, JOB_AI_MODEL, prompt, max_tokens=500)
 
     if not data or not isinstance(data, dict):
         return None
@@ -391,16 +457,19 @@ def _extract_requirements_from_page(client, page_text, source_url):
     if not data.get("is_job_ad"):
         return None
 
-    requirements = data.get("requirements") or []
-    topics = data.get("topics") or []
+    raw_topics = data.get("technical_topics") or []
 
-    if not requirements:
+    # فیلتر ایمنی: فقط مبحث‌هایی که واقعاً در فهرست ثابت هستند قبول
+    # می‌شوند؛ اگر مدل چیزی خارج از فهرست برگرداند، نادیده گرفته
+    # می‌شود (نه اضافه).
+    technical_topics = [t for t in raw_topics if t in CANONICAL_TOPICS]
+
+    if not technical_topics:
         return None
 
     return {
         "job_title": data.get("job_title", ""),
-        "topics": topics,
-        "requirements": requirements,
+        "technical_topics": technical_topics,
         "source_url": source_url,
     }
 
@@ -487,121 +556,150 @@ def collect_real_job_requirements(client, log=print):
 # مرحله ۲: ساخت ۱۰۰ سؤال فقط بر اساس الزامات واقعی جمع‌آوری‌شده
 # =========================================================
 
-QUESTION_GEN_PROMPT = """
-فهرست زیر، الزامات و مهارت‌های واقعی است که از آگهی‌های استخدام واقعی
-برای مشاغل حسابدار، حسابدار ارشد، مدیر مالی، رئیس حسابداری و حسابرس در
-ایران استخراج شده است (هر خط با موضوع آن مشخص شده):
+# =========================================================
+# مرحله ۲: ساخت سؤال‌های تخصصی واقعی، به‌ازای هر مبحث
+# =========================================================
+#
+# طراحی این مرحله عمداً فرق دارد با مرحله استخراج: مرحله استخراج
+# فقط تعیین می‌کند «کدام مبحث‌ها واقعاً در آگهی‌های استخدام خواسته
+# شده‌اند» (یعنی مبحث‌ها را از واقعیت بازار کار می‌گیریم). اما خودِ
+# محتوای سؤال‌ها را از تخصص هوش مصنوعی در همان مبحث می‌سازیم، نه
+# صرفاً از جمله‌های سطحی آگهی («۲ سال سابقه لازم است») — چون آن
+# جمله‌ها عمق کافی برای طراحی سؤال تخصصی ندارند. برای هر رقم یا
+# نرخ قانونی، از ابزار جست‌وجوی وب استفاده می‌شود تا رقم غلط یا
+# قدیمی حدس زده نشود.
+# =========================================================
 
-{requirements_block}
+TOPIC_QUESTION_PROMPT = """
+تو داری برای داوطلبان مشاغل حسابدار، حسابدار ارشد، مدیر مالی، رئیس
+حسابداری و حسابرس در ایران، یک بخش از آزمون تخصصی طراحی می‌کنی.
 
-بر اساس فقط و فقط همین فهرست (بدون حدس یا افزودن مطلبی که در فهرست
-نیست)، دقیقا {count} سؤال چهارگزینه‌ای حسابداری/مالی/مالیاتی/تامین
-اجتماعی/اکسل بساز که هرکدام سطح تسلط داوطلب بر یکی از الزامات فهرست
-بالا را بسنجد.
+مبحث این بخش از آزمون: «{topic}»
 
-خروجی را فقط به‌صورت یک آرایه JSON با این ساختار دقیق برگردان و هیچ
-توضیح اضافه‌ای ننویس:
+این مبحث را کارفرمایان واقعی در آگهی‌های استخدام حسابداری در ایران
+به‌عنوان یکی از الزامات یا مهارت‌های مورد نیاز ذکر کرده‌اند؛ یعنی تسلط
+بر آن واقعاً برای گرفتن این مشاغل مفید است.
+
+دقیقاً {count} سؤال چهارگزینه‌ای تخصصی و کاربردی در همین مبحث بساز که
+سطح واقعی دانش حرفه‌ای داوطلب را بسنجد — نه سؤال کلی یا تعریف لغوی
+(مثلا نپرس «فلان مبحث چیست»)، بلکه سؤالی که یک حسابدار حرفه‌ای واقعاً
+باید بتواند جواب بدهد: محاسبه صحیح، تشخیص ثبت درست، رویه صحیح کار،
+تشخیص خطا، یا اعمال درست یک قاعده/نرخ/قانون.
+
+قانون بسیار مهم درباره اعداد، نرخ‌ها و احکام قانونی:
+اگر سؤالی به یک رقم، نرخ، یا حکم قانونیِ به‌روز نیاز دارد (مثل نرخ
+اضافه‌کاری، حق اولاد، حداقل دستمزد، سقف معافیت مالیاتی، نرخ حق بیمه)،
+حتما قبل از نوشتن سؤال آن را با جست‌وجوی وب تایید کن. اگر نتوانستی با
+اطمینان یک رقم دقیق و به‌روز را تایید کنی، به‌جای سؤال عددی، یک سؤال
+مفهومی یا رویه‌ای در همان مبحث بساز (بدون ذکر رقم قطعی) — هرگز رقم یا
+نرخ را حدس نزن.
+
+خروجی را فقط به‌صورت یک آرایه JSON با این ساختار دقیق برگردان، بدون
+هیچ توضیح اضافه قبل یا بعد از آن:
 
 [
   {{
-    "topic": "موضوع کوتاه (مثلا ارزش افزوده، حقوق و دستمزد، اکسل و ...)",
     "question": "متن سؤال",
     "options": ["گزینه ۱", "گزینه ۲", "گزینه ۳", "گزینه ۴"],
     "correct_index": 0
   }}
 ]
 
-قوانین مهم:
-- سؤال‌ها باید از موضوعات مختلف فهرست بالا باشند، نه فقط یک موضوع.
-- هیچ سؤالی درباره شماره ماده قانونی یا مبلغ دقیق نساز مگر این‌که آن
-  عدد یا شماره دقیقا در فهرست بالا آمده باشد.
-- correct_index باید عددی بین ۰ تا ۳ باشد.
+correct_index باید عددی بین ۰ تا ۳ باشد.
 """
 
 
-def generate_question_bank(client, extracted_postings, log=print):
+def generate_question_bank(client, extracted_postings, question_model, log=print):
+    """
+    برای هر مبحث از CANONICAL_TOPICS که واقعاً در حداقل یک آگهی
+    واقعی دیده شده، به نسبت میزان تقاضای واقعی بازار (تعداد
+    آگهی‌هایی که آن مبحث را خواسته‌اند)، چند سؤال تخصصی می‌سازد.
+    question_model باید مدلی باشد که از ابزار جست‌وجوی وب پشتیبانی
+    می‌کند (همان مدل اصلی ربات، AI_MODEL، پیشنهاد می‌شود).
+    """
 
     if not extracted_postings:
         log("JOB: no extracted postings, cannot generate questions")
         return []
 
-    lines = []
+    topic_counts = {t: 0 for t in CANONICAL_TOPICS}
 
     for posting in extracted_postings:
-        topics = "، ".join(posting.get("topics") or ["عمومی"])
-        for req in posting.get("requirements", []):
-            lines.append(f"- [{topics}] {req}")
+        for topic in posting.get("technical_topics", []):
+            if topic in topic_counts:
+                topic_counts[topic] += 1
 
-    # حذف موارد تکراری با حفظ ترتیب
-    seen = set()
-    unique_lines = []
-    for line in lines:
-        key = line.strip().lower()
-        if key not in seen:
-            seen.add(key)
-            unique_lines.append(line)
+    active_topics = [t for t in CANONICAL_TOPICS if topic_counts[t] > 0]
 
-    unique_lines = unique_lines[:350]  # کنترل حجم توکن
+    if not active_topics:
+        log("JOB: هیچ مبحث فنی واقعی از آگهی‌ها استخراج نشد")
+        return []
 
-    requirements_block = "\n".join(unique_lines)
+    log(
+        "JOB: مبحث‌های فعال بر اساس تقاضای واقعی: "
+        + "، ".join(f"{t} ({topic_counts[t]})" for t in active_topics)
+    )
 
     all_questions = []
-    batch_size = 25
-    remaining = TOTAL_QUESTIONS_TARGET
 
-    while remaining > 0:
+    for topic in active_topics:
 
-        this_batch = min(batch_size, remaining)
+        freq = topic_counts[topic]
 
-        prompt = QUESTION_GEN_PROMPT.format(
-            requirements_block=requirements_block,
-            count=this_batch,
+        count = (
+            QUESTIONS_PER_TOPIC_HIGH
+            if freq >= HIGH_FREQUENCY_THRESHOLD
+            else QUESTIONS_PER_TOPIC_LOW
         )
 
-        data = _call_openai_json(client, prompt, max_tokens=4000)
+        prompt = TOPIC_QUESTION_PROMPT.format(topic=topic, count=count)
 
-        if isinstance(data, list):
+        data = _call_openai_json(
+            client,
+            question_model,
+            prompt,
+            max_tokens=3500,
+            use_search=True,
+        )
 
-            for item in data:
+        if not isinstance(data, list):
+            log(f"JOB: ساخت سؤال برای مبحث «{topic}» ناموفق بود")
+            continue
 
-                try:
-                    options = item.get("options")
-                    correct_index = int(item.get("correct_index"))
+        added = 0
 
-                    if (
-                        not isinstance(options, list)
-                        or len(options) != 4
-                        or not (0 <= correct_index <= 3)
-                        or not item.get("question")
-                        or not item.get("topic")
-                    ):
-                        continue
+        for item in data:
 
-                    all_questions.append(
-                        {
-                            "id": f"q{len(all_questions) + 1}",
-                            "topic": item["topic"].strip(),
-                            "question": item["question"].strip(),
-                            "options": [
-                                str(o).strip() for o in options
-                            ],
-                            "correct_index": correct_index,
-                        }
-                    )
+            try:
+                options = item.get("options")
+                correct_index = int(item.get("correct_index"))
 
-                except Exception as e:
-                    log(f"JOB: skipping malformed question: {e}")
+                if (
+                    not isinstance(options, list)
+                    or len(options) != 4
+                    or not (0 <= correct_index <= 3)
+                    or not item.get("question")
+                ):
+                    continue
 
-        else:
-            log("JOB: question batch generation failed, stopping batches")
-            break
+                all_questions.append(
+                    {
+                        "id": f"q{len(all_questions) + 1}",
+                        "topic": topic,
+                        "question": str(item["question"]).strip(),
+                        "options": [str(o).strip() for o in options],
+                        "correct_index": correct_index,
+                    }
+                )
 
-        remaining = TOTAL_QUESTIONS_TARGET - len(all_questions)
+                added += 1
 
-        if remaining <= 0:
-            break
+            except Exception as e:
+                log(f"JOB: skipping malformed question in '{topic}': {e}")
 
-    log(f"JOB: generated {len(all_questions)} valid questions")
+        log(f"JOB: مبحث «{topic}»: {added} سؤال معتبر ساخته شد")
+
+    log(f"JOB: مجموع سؤال‌های ساخته‌شده = {len(all_questions)}")
 
     return all_questions
 
@@ -649,13 +747,22 @@ def get_bank_meta():
 # فرآیند کامل ماهانه (اسکرپ + ساخت سؤال + ذخیره)
 # =========================================================
 
-def refresh_job_bank(client, log=print):
+def refresh_job_bank(client, question_model=None, log=print):
 
     log("JOB: شروع به‌روزرسانی ماهانه بانک سؤال استخدام‌یاب")
 
+    # اگر مدل جداگانه‌ای برای ساخت سؤال داده نشده، از همان مدل
+    # ارزان استخراج استفاده می‌شود، اما توجه: آن مدل ممکن است از
+    # ابزار جست‌وجوی وب پشتیبانی نکند و سؤال‌های عددی/قانونی را
+    # مفهومی بسازد. برای بهترین نتیجه، مدل اصلی ربات (AI_MODEL) را
+    # از bot.py پاس بدهید.
+    effective_model = question_model or JOB_AI_MODEL
+
     try:
         postings = collect_real_job_requirements(client, log=log)
-        questions = generate_question_bank(client, postings, log=log)
+        questions = generate_question_bank(
+            client, postings, effective_model, log=log
+        )
 
         if questions:
             save_question_bank(questions)
