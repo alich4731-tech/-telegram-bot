@@ -64,6 +64,14 @@ AI_WEB_SEARCH_CONTEXT = os.getenv(
     "high"
 )
 
+# اگر جواب اول یک سؤال قانونی ناقص باشد، به‌صورت پیش‌فرض یک بار
+# دیگر با سقف توکن بالاتر (و یک وب‌سرچ کامل دیگر) تلاش می‌شود.
+# برای کاهش مصرف توکن، با AI_LEGAL_RETRY_ENABLED=false می‌توانید
+# این تلاش دوم را خاموش کنید (فقط همان جواب اول ارسال می‌شود).
+AI_LEGAL_RETRY_ENABLED = (
+    os.getenv("AI_LEGAL_RETRY_ENABLED", "true").strip().lower() == "true"
+)
+
 
 # =========================================================
 # کانال رسمی ربات
@@ -833,6 +841,18 @@ import job_hunter
 
 
 JOB_ADMIN_USER_ID = os.getenv("JOB_ADMIN_USER_ID")
+
+# اگر می‌خواهید موقتاً (مثلاً تا تهیه اشتراک OpenAI جدید) هیچ
+# فراخوانی خودکار AI برای بخش استخدام‌یاب انجام نشود، این را در
+# Environment Variables برابر "false" بگذارید. با این کار، هم
+# اجرای خودکار ماهانه و هم اجرای ۶۰ ثانیه‌ای بعد از هر روشن‌شدن
+# غیرفعال می‌شود؛ منوی استخدام‌یاب همچنان با همان بانک سؤال
+# قبلی (اگر وجود داشته باشد) کار می‌کند، و دستور دستی /refresh_jobs
+# هم غیرفعال می‌شود. بقیه ربات (دستیار حسابداری) تحت تأثیر قرار
+# نمی‌گیرد.
+JOB_AUTO_REFRESH_ENABLED = (
+    os.getenv("JOB_AUTO_REFRESH_ENABLED", "true").strip().lower() == "true"
+)
 
 JOB_MENU_BUTTON = "🎯 استخدام‌یاب هوشمند"
 
@@ -1827,12 +1847,26 @@ async def _request_ai(
                 "search": True,
                 "required": True,
             },
-            {
-                "tokens": AI_MAX_OUTPUT_TOKENS_HARD_CAP,
-                "search": True,
-                "required": True,
-            },
         ]
+
+        # =====================================================
+        # اگر جواب اول ناقص باشد، به‌صورت پیش‌فرض یک بار دیگر با
+        # سقف توکن بالاتر تلاش می‌شود (که یعنی یک وب‌سرچ کامل دیگر
+        # هم انجام می‌شود، یعنی تقریبا دو برابر هزینه در بدترین
+        # حالت). اگر مصرف توکن OpenAI برایتان مهم است، با ست‌کردن
+        # AI_LEGAL_RETRY_ENABLED=false در Environment Variables
+        # می‌توانید این تلاش دوم را خاموش کنید.
+        # =====================================================
+
+        if AI_LEGAL_RETRY_ENABLED:
+
+            attempts.append(
+                {
+                    "tokens": AI_MAX_OUTPUT_TOKENS_HARD_CAP,
+                    "search": True,
+                    "required": True,
+                }
+            )
 
     else:
 
@@ -3469,6 +3503,17 @@ async def refresh_jobs_command(
     ):
         return
 
+    if not JOB_AUTO_REFRESH_ENABLED:
+
+        await update.message.reply_text(
+            "⚠️ چرخه استخدام‌یاب موقتاً از طریق "
+            "JOB_AUTO_REFRESH_ENABLED خاموش شده است؛ برای ساخت "
+            "دستی بانک سؤال، اول این متغیر را در Environment "
+            "Variables به true تغییر دهید."
+        )
+
+        return
+
     if client is None:
 
         await update.message.reply_text(
@@ -3879,7 +3924,16 @@ app.add_handler(
 # هم می‌توانید استفاده کنید.
 # =========================================================
 
-if app.job_queue is not None:
+if not JOB_AUTO_REFRESH_ENABLED:
+
+    print(
+        "JOB: JOB_AUTO_REFRESH_ENABLED=false است؛ چرخه خودکار "
+        "استخدام‌یاب (ماهانه و استارت‌آپ) غیرفعال شد. منوی "
+        "استخدام‌یاب با بانک سؤال موجود (در صورت وجود) کار "
+        "می‌کند."
+    )
+
+elif app.job_queue is not None:
 
     app.job_queue.run_repeating(
         scheduled_job_refresh,
