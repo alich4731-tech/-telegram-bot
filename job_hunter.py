@@ -45,6 +45,25 @@ os.makedirs(JOB_DATA_DIR, exist_ok=True)
 # می‌خواند)، پس یک مدل ارزان کافی است.
 JOB_AI_MODEL = os.getenv("JOB_AI_MODEL", "gpt-4o-mini")
 
+# مدلی که برای «ساخت خودِ سؤال‌های تخصصی» استفاده می‌شود. اگر ست
+# نشده باشد، مدلی که bot.py صدا می‌زند (معمولاً همان AI_MODEL
+# اصلی ربات) استفاده می‌شود که دقیق‌تر ولی گران‌تر است. اگر
+# می‌خواهید هزینه این مرحله را کم کنید، این را روی یک مدل ارزان‌تر
+# (مثلاً gpt-4o-mini) بگذارید — کیفیت مفهومی سؤال‌ها معمولاً باز هم
+# خوب می‌ماند، فقط ممکن است سؤال‌های عددی/نرخ‌محور کمتر ساخته شوند
+# چون آن مدل‌ها همیشه از وب‌سرچ پشتیبانی نمی‌کنند.
+JOB_QUESTION_MODEL_OVERRIDE = os.getenv("JOB_QUESTION_MODEL", "").strip()
+
+# اگر می‌خواهید هزینه ساخت سؤال را بیشتر کم کنید، وب‌سرچ (که برای
+# تایید نرخ‌ها/ارقام قانونی استفاده می‌شود) را با
+# JOB_QUESTION_USE_WEB_SEARCH=false خاموش کنید. در این حالت مدل
+# طبق دستور پرامپت، به‌جای حدس‌زدن عدد، فقط سؤال مفهومی/رویه‌ای
+# می‌سازد (باز هم عدد اشتباه حدس زده نمی‌شود، فقط سؤال عددی کمتری
+# خواهید داشت).
+JOB_QUESTION_USE_WEB_SEARCH = (
+    os.getenv("JOB_QUESTION_USE_WEB_SEARCH", "true").strip().lower() == "true"
+)
+
 # چند آگهی از هر سایت به‌ازای هر عنوان شغلی بررسی شود
 MAX_LISTINGS_PER_SITE_PER_ROLE = int(
     os.getenv("JOB_MAX_LISTINGS_PER_SITE", "6")
@@ -659,7 +678,7 @@ def generate_question_bank(client, extracted_postings, question_model, log=print
             question_model,
             prompt,
             max_tokens=3500,
-            use_search=True,
+            use_search=JOB_QUESTION_USE_WEB_SEARCH,
         )
 
         if not isinstance(data, list):
@@ -751,12 +770,19 @@ def refresh_job_bank(client, question_model=None, log=print):
 
     log("JOB: شروع به‌روزرسانی ماهانه بانک سؤال استخدام‌یاب")
 
-    # اگر مدل جداگانه‌ای برای ساخت سؤال داده نشده، از همان مدل
-    # ارزان استخراج استفاده می‌شود، اما توجه: آن مدل ممکن است از
+    # اگر متغیر محیطی JOB_QUESTION_MODEL ست شده باشد، همیشه همان
+    # اولویت دارد (یعنی صراحتاً خواسته‌اید مدل ارزان‌تری استفاده
+    # شود، حتی اگر bot.py مدل اصلی و گران‌تر را پاس داده باشد).
+    # در غیر این صورت، اگر مدل جداگانه‌ای داده نشده، از همان مدل
+    # ارزان استخراج استفاده می‌شود؛ اما توجه: آن مدل ممکن است از
     # ابزار جست‌وجوی وب پشتیبانی نکند و سؤال‌های عددی/قانونی را
-    # مفهومی بسازد. برای بهترین نتیجه، مدل اصلی ربات (AI_MODEL) را
-    # از bot.py پاس بدهید.
-    effective_model = question_model or JOB_AI_MODEL
+    # مفهومی بسازد. برای بهترین دقت (و بیشترین هزینه)، مدل اصلی
+    # ربات (AI_MODEL) را از bot.py پاس بدهید.
+    effective_model = (
+        JOB_QUESTION_MODEL_OVERRIDE
+        or question_model
+        or JOB_AI_MODEL
+    )
 
     try:
         postings = collect_real_job_requirements(client, log=log)
