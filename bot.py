@@ -3,6 +3,7 @@ import asyncio
 import base64
 import html
 import re
+import time
 
 from openai import OpenAI
 
@@ -2890,6 +2891,26 @@ async def job_hunter_entry(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
+    # =====================================================
+    # استفاده از این بخش هم مثل دستیار هوش مصنوعی، فقط برای
+    # اعضای کانال آزاد است.
+    # =====================================================
+
+    is_member = await check_channel_membership(
+        update,
+        context
+    )
+
+    if not is_member:
+
+        await show_channel_membership_required(
+            update,
+            context,
+            return_to_main=False,
+        )
+
+        return
+
     bank = job_hunter.load_question_bank()
 
     if not bank:
@@ -2937,6 +2958,23 @@ async def job_flow_text(
     step = context.user_data.get("job_flow")
 
     if not step:
+        return
+
+    # =====================================================
+    # اگر کاربر در میانه فرآیند از کانال خارج شده باشد، ادامه
+    # نمی‌دهیم (دقیقا مثل رفتار بخش هوش مصنوعی).
+    # =====================================================
+
+    is_member = await ensure_ai_membership(
+        update,
+        context
+    )
+
+    if not is_member:
+
+        context.user_data["job_flow"] = None
+        context.user_data["job_quiz"] = None
+
         return
 
     text = (update.message.text or "").strip()[:100]
@@ -3019,6 +3057,18 @@ async def job_gender_callback(
 
     query = update.callback_query
     await query.answer()
+
+    is_member = await ensure_ai_membership(
+        update,
+        context
+    )
+
+    if not is_member:
+
+        context.user_data["job_flow"] = None
+        context.user_data["job_quiz"] = None
+
+        return
 
     if context.user_data.get("job_flow") != "gender":
         return
@@ -3125,6 +3175,18 @@ async def job_quiz_callback(
 
     query = update.callback_query
     await query.answer()
+
+    is_member = await ensure_ai_membership(
+        update,
+        context
+    )
+
+    if not is_member:
+
+        context.user_data["job_flow"] = None
+        context.user_data["job_quiz"] = None
+
+        return
 
     quiz = context.user_data.get("job_quiz")
 
@@ -3237,49 +3299,156 @@ async def _finish_job_quiz(chat_id, context):
         ),
     )
 
-    city = profile.get("city")
+    city = (profile.get("city") or "").strip()
 
     try:
-        job_links = await asyncio.to_thread(
-            job_hunter.find_live_jobs_for_topics,
+        pool = await asyncio.to_thread(
+            job_hunter.find_live_jobs_grouped_by_city,
             qualified_topics,
-            city,
         )
     except Exception as e:
         print(f"JOB LIVE SEARCH ERROR: {e}")
-        job_links = {}
+        pool = []
 
-    reply_lines = []
+    by_city = job_hunter.group_pool_by_city(pool)
 
-    any_link_found = False
+    if not by_city:
 
-    for topic in qualified_topics:
-
-        links = job_links.get(topic) or []
-
-        reply_lines.append(f"\n🔹 {topic}")
-
-        if not links:
-            reply_lines.append("  آگهی زنده‌ای در همین لحظه پیدا نشد.")
-            continue
-
-        any_link_found = True
-
-        for link in links:
-            reply_lines.append(f"  {link}")
-
-    if not any_link_found:
-        reply_lines.append(
-            "\nدر حال حاضر آگهی زنده‌ای پیدا نشد؛ لطفاً بعدا دوباره "
-            "امتحان کنید یا مستقیم در سایت‌های کاریابی جست‌وجو کنید."
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "در حال حاضر آگهی زنده‌ای برای این موضوعات پیدا نشد؛ "
+                "لطفاً بعدا دوباره امتحان کنید یا مستقیم در سایت‌های "
+                "کاریابی جست‌وجو کنید."
+            ),
+            reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
         )
+
+        return
+
+    # =====================================================
+    # اول بررسی می‌کنیم آیا در همان شهر خود کاربر آگهی پیدا شده
+    # =====================================================
+
+    matched_city_key = None
+    user_city_norm = job_hunter.normalize_city_name(city)
+
+    if user_city_norm:
+        for city_key in by_city:
+            if job_hunter.normalize_city_name(city_key) == user_city_norm:
+                matched_city_key = city_key
+                break
+
+    def _format_city_entries(entries):
+        lines = []
+        for entry in entries:
+            lines.append(f"• [{entry['topic']}] {entry['url']}")
+        return "\n".join(lines)
+
+    if matched_city_key:
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                f"🎉 در شهر «{city}» این آگهی‌های واقعی و مرتبط با "
+                "توانایی‌های شما پیدا شد:\n\n"
+                + _format_city_entries(by_city[matched_city_key])
+            ),
+            reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
+            disable_web_page_preview=True,
+        )
+
+        return
+
+    # =====================================================
+    # در شهر خود کاربر چیزی پیدا نشد؛ فهرست شهرهایی که آگهی در
+    # آن‌ها پیدا شده را به‌صورت دکمه نشان می‌دهیم تا کاربر انتخاب
+    # کند.
+    # =====================================================
+
+    other_cities = [
+        c for c in by_city.keys() if c != "سایر شهرها"
+    ]
+
+    # اگر فقط دسته «سایر شهرها» (شهر نامشخص) داشتیم هم آن را نشان
+    # می‌دهیم، چون بهتر از هیچ‌چیز نشان‌ندادن است.
+    if not other_cities and "سایر شهرها" in by_city:
+        other_cities = ["سایر شهرها"]
+
+    context.user_data["job_result_pool"] = by_city
+    context.user_data["job_cities_list"] = other_cities
+
+    inline_buttons = [
+        [InlineKeyboardButton(c, callback_data=f"jcity|{i}")]
+        for i, c in enumerate(other_cities)
+    ]
+
+    city_label = city or "شهری که وارد کردید"
 
     await context.bot.send_message(
         chat_id=chat_id,
-        text="\n".join(reply_lines),
-        reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
-        disable_web_page_preview=True,
+        text=(
+            f"در شهر «{city_label}» آگهی‌ای متناسب با توانایی‌های "
+            "شما در این لحظه پیدا نشد.\n\n"
+            "اما در شهرهای زیر آگهی‌های مرتبط پیدا شد؛ اگر مایلید، "
+            "یکی را انتخاب کنید تا لینک‌های آن را برایتان بفرستم:"
+        ),
+        reply_markup=InlineKeyboardMarkup(inline_buttons),
     )
+
+
+async def job_city_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    query = update.callback_query
+    await query.answer()
+
+    is_member = await ensure_ai_membership(
+        update,
+        context
+    )
+
+    if not is_member:
+        return
+
+    by_city = context.user_data.get("job_result_pool") or {}
+    cities_list = context.user_data.get("job_cities_list") or []
+
+    try:
+        idx = int(query.data.split("|", 1)[1])
+        city_name = cities_list[idx]
+    except Exception:
+        return
+
+    entries = by_city.get(city_name) or []
+
+    if not entries:
+
+        await query.edit_message_text(
+            "متاسفانه این فهرست دیگر در دسترس نیست؛ لطفاً دوباره "
+            "آزمون را شروع کنید."
+        )
+
+        return
+
+    lines = [f"🔹 آگهی‌های مرتبط در «{city_name}»:\n"]
+
+    for entry in entries:
+        lines.append(f"• [{entry['topic']}] {entry['url']}")
+
+    try:
+        await query.edit_message_text(
+            "\n".join(lines),
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="\n".join(lines),
+            disable_web_page_preview=True,
+        )
 
 
 # =========================================================
@@ -3339,6 +3508,30 @@ async def scheduled_job_refresh(context: ContextTypes.DEFAULT_TYPE):
     if client is None:
         print("JOB: OPENAI_API_KEY not set, skipping scheduled refresh")
         return
+
+    # =====================================================
+    # این تابع هم هر ۳۰ روز یک‌بار خودکار اجرا می‌شود، و هم ۶۰
+    # ثانیه بعد از هر بار بالا آمدن ربات (تا بعد از ری‌استارت یا
+    # دیپلوی جدید، بانک سؤال خالی نماند). برای این‌که این حالت دوم
+    # باعث ساخت مجدد بی‌مورد و هزینه اضافه نشود، اگر بانک سؤال
+    # همین اواخر (کمتر از ۲۵ روز پیش) ساخته شده باشد، از اجرای
+    # دوباره صرف‌نظر می‌کنیم.
+    # =====================================================
+
+    meta = job_hunter.get_bank_meta()
+
+    if meta and meta.get("generated_at"):
+
+        age_days = (time.time() - meta["generated_at"]) / 86400
+
+        if age_days < 25:
+
+            print(
+                f"JOB: بانک سؤال {age_days:.1f} روز پیش ساخته شده؛ "
+                "نیازی به ساخت مجدد نیست."
+            )
+
+            return
 
     await asyncio.to_thread(job_hunter.refresh_job_bank, client, print)
 
@@ -3417,6 +3610,13 @@ app.add_handler(
     CallbackQueryHandler(
         job_quiz_callback,
         pattern=r"^jans\|",
+    )
+)
+
+app.add_handler(
+    CallbackQueryHandler(
+        job_city_callback,
+        pattern=r"^jcity\|",
     )
 )
 
