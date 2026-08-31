@@ -71,42 +71,85 @@ MAX_LISTINGS_PER_SITE_PER_ROLE = int(
 
 # تعداد سؤال ساخته‌شده برای مبحث‌هایی که در آگهی‌های زیادی دیده
 # شده‌اند (پرتقاضا) در برابر مبحث‌هایی که کم‌تر دیده شده‌اند.
-QUESTIONS_PER_TOPIC_HIGH = 10
-QUESTIONS_PER_TOPIC_LOW = 6
+QUESTIONS_PER_TOPIC_HIGH = 16
+QUESTIONS_PER_TOPIC_LOW = 10
 HIGH_FREQUENCY_THRESHOLD = 3  # مبحث در حداقل ۳ آگهی جدا دیده شده باشد
 
-QUIZ_QUESTION_COUNT = 30
-MAX_QUESTIONS_PER_TOPIC_IN_QUIZ = 4
+# حتی اگر مبحثی این ماه در هیچ آگهی واقعی دیده نشود (مثلاً چون
+# اسکرپ آن ماه ضعیف بوده یا کارفرمایان آن حوزه کمتر آگهی داده‌اند)،
+# چون می‌دانیم آن مبحث برای طیف کامل مشاغل حسابداری (از کمک‌حسابدار
+# تا مدیر مالی) واقعاً لازم است، همچنان این تعداد سؤال حداقلی برایش
+# ساخته می‌شود تا پوشش سطوح مختلف همیشه حفظ شود.
+QUESTIONS_PER_TOPIC_BASELINE = 8
+
+# به‌جای پخش کم‌عمق سؤال روی همه ۱۸ موضوع (که نمره هر موضوع را
+# آماری ضعیف می‌کند)، هر آزمون فقط روی یک زیرمجموعه تصادفی از
+# موضوعات متمرکز می‌شود، اما از هر موضوع انتخاب‌شده عمیق‌تر سؤال
+# می‌پرسد؛ با ۵ سؤال از هر موضوع، رسیدن به آستانه ۸۰٪ یعنی دقیقاً
+# ۴ پاسخ درست از ۵ — یک معیار روشن و معنادار. چون این انتخاب فقط
+# از بین سؤال‌های از‌قبل‌ساخته‌شده در بانک است (نه فراخوانی جدید
+# هوش مصنوعی)، این افزایش عمق هیچ هزینه اضافه‌ای در لحظه آزمون
+# ندارد.
+TOPICS_PER_QUIZ = 10
+MAX_QUESTIONS_PER_TOPIC_IN_QUIZ = 5
 PASS_THRESHOLD = 0.8  # ۸۰ درصد
 
 # =========================================================
 # فهرست ثابت مبحث‌های واقعاً فنیِ حسابداری/مالی/مالیاتی که قابل
-# آزمون‌گرفتن هستند. مرحله استخراج فقط اجازه دارد از همین فهرست
-# انتخاب کند (نه هر عبارت آزاد دیگری)، تا مبحث‌های بی‌ربط یا
-# غیرقابل‌آزمون مثل «سابقه کار» یا «روحیه کار تیمی» وارد بانک
-# سؤال نشوند. اگر خواستید، می‌توانید این فهرست را ویرایش کنید.
+# آزمون‌گرفتن هستند، دسته‌بندی‌شده بر اساس سطح شغلی که معمولاً آن
+# مبحث در آگهی‌هایش خواسته می‌شود (کمک‌حسابدار → حسابدار →
+# حسابدار ارشد/رئیس حسابداری → مدیر مالی). این دسته‌بندی فقط برای
+# مستندسازی و اطمینان از پوشش کامل طیف مشاغل است؛ مرحله استخراج
+# فقط اجازه دارد از میان همین مبحث‌ها انتخاب کند (نه هر عبارت آزاد
+# دیگری)، تا مبحث‌های بی‌ربط یا غیرقابل‌آزمون مثل «سابقه کار» یا
+# «روحیه کار تیمی» وارد بانک سؤال نشوند. اگر خواستید، می‌توانید
+# این فهرست را ویرایش یا تکمیل کنید.
 # =========================================================
 
+CANONICAL_TOPICS_BY_LEVEL = {
+    "کمک‌حسابدار / سطح مقدماتی": [
+        "اسناد و ثبت‌های حسابداری روزانه",
+        "اکسل و Power Query در حسابداری",
+        "نرم‌افزارهای حسابداری (مانند هلو، سپیدار، همکاران سیستم)",
+        "مغایرت‌گیری بانکی",
+    ],
+    "حسابدار": [
+        "ارزش افزوده و سامانه مؤدیان",
+        "حقوق و دستمزد و مزایای کارکنان",
+        "بیمه تأمین اجتماعی",
+        "قانون کار",
+        "تراز آزمایشی و بستن حساب‌ها",
+        "دارایی ثابت و استهلاک",
+    ],
+    "حسابدار ارشد / رئیس حسابداری": [
+        "مالیات عملکرد و اظهارنامه مالیاتی",
+        "استانداردهای حسابداری ایران",
+        "حسابداری صنعتی و بهای تمام‌شده",
+        "تهیه صورت‌های مالی",
+        "حسابرسی",
+    ],
+    "مدیر مالی": [
+        "خزانه‌داری و مدیریت نقدینگی",
+        "بودجه‌بندی و گزارش‌های مدیریتی",
+        "قراردادها و امور حقوقی مالی",
+        "تحلیل صورت‌های مالی و نسبت‌های مالی",
+        "مدیریت ریسک مالی و اعتباری",
+    ],
+}
+
+# فهرست تخت (بدون سطح‌بندی) که بقیه کد از آن استفاده می‌کند، به‌علاوه
+# نگاشت هر مبحث به سطح شغلی‌اش (برای لاگ و بررسی پوشش).
 CANONICAL_TOPICS = [
-    "ارزش افزوده و سامانه مؤدیان",
-    "مالیات عملکرد و اظهارنامه مالیاتی",
-    "حقوق و دستمزد و مزایای کارکنان",
-    "بیمه تأمین اجتماعی",
-    "قانون کار",
-    "استانداردهای حسابداری ایران",
-    "حسابداری صنعتی و بهای تمام‌شده",
-    "تهیه صورت‌های مالی",
-    "حسابرسی",
-    "اکسل و Power Query در حسابداری",
-    "نرم‌افزارهای حسابداری (مانند هلو، سپیدار، همکاران سیستم)",
-    "اسناد و ثبت‌های حسابداری روزانه",
-    "تراز آزمایشی و بستن حساب‌ها",
-    "مغایرت‌گیری بانکی",
-    "دارایی ثابت و استهلاک",
-    "خزانه‌داری و مدیریت نقدینگی",
-    "بودجه‌بندی و گزارش‌های مدیریتی",
-    "قراردادها و امور حقوقی مالی",
+    topic
+    for topics_in_level in CANONICAL_TOPICS_BY_LEVEL.values()
+    for topic in topics_in_level
 ]
+
+TOPIC_LEVEL_MAP = {
+    topic: level
+    for level, topics_in_level in CANONICAL_TOPICS_BY_LEVEL.items()
+    for topic in topics_in_level
+}
 
 ROLE_KEYWORDS = [
     "حسابدار",
@@ -425,6 +468,27 @@ EXTRACT_PROMPT = """
 """
 
 
+def _extract_output_text_fallback(resp):
+    """
+    output_text گاهی خالی برمی‌گردد حتی اگر مدل چیزی تولید کرده
+    باشد (مثلا وقتی پاسخ در میانه یک تکه متن قطع شده). این تابع
+    به‌جای تکیه فقط بر output_text، مستقیم از داخل resp.output هم
+    متن را جمع می‌کند.
+    """
+    collected = []
+    try:
+        for item in (getattr(resp, "output", []) or []):
+            if getattr(item, "type", None) != "message":
+                continue
+            for content in (getattr(item, "content", []) or []):
+                t = getattr(content, "text", None)
+                if t:
+                    collected.append(t)
+    except Exception:
+        pass
+    return "".join(collected).strip()
+
+
 def _call_openai_json(client, model, prompt, max_tokens=1200, use_search=False):
 
     try:
@@ -442,11 +506,48 @@ def _call_openai_json(client, model, prompt, max_tokens=1200, use_search=False):
 
         resp = client.responses.create(**args)
 
+        status = getattr(resp, "status", None)
+        incomplete_details = getattr(resp, "incomplete_details", None)
+        incomplete_reason = (
+            getattr(incomplete_details, "reason", None)
+            if incomplete_details else None
+        )
+
         text = (getattr(resp, "output_text", None) or "").strip()
-        text = re.sub(r"^```json", "", text.strip())
-        text = re.sub(r"^```", "", text.strip())
-        text = re.sub(r"```$", "", text.strip())
-        return json.loads(text)
+
+        if not text:
+            text = _extract_output_text_fallback(resp)
+
+        if status == "incomplete":
+            print(
+                f"JOB AI JSON WARNING: پاسخ ناقص برگشت "
+                f"(reason={incomplete_reason}, "
+                f"max_tokens={max_tokens}, "
+                f"طول متن دریافتی={len(text)} کاراکتر). "
+                "احتمالا سقف توکن این تماس کافی نبوده؛ اگر این پیام "
+                "زیاد تکرار شد، max_tokens مربوطه را در کد بالا "
+                "ببرید یا JOB_QUESTION_USE_WEB_SEARCH را false کنید."
+            )
+
+        if not text:
+            print(
+                "JOB AI JSON WARNING: هیچ متنی از مدل دریافت نشد "
+                f"(status={status})."
+            )
+            return None
+
+        cleaned = re.sub(r"^```json", "", text.strip())
+        cleaned = re.sub(r"^```", "", cleaned.strip())
+        cleaned = re.sub(r"```$", "", cleaned.strip())
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            print(
+                f"JOB AI JSON PARSE ERROR: {e} | "
+                f"ابتدای متن دریافتی: {cleaned[:300]!r}"
+            )
+            return None
 
     except Exception as e:
         print(f"JOB AI JSON CALL ERROR [{type(e).__name__}]: {e}")
@@ -468,7 +569,7 @@ def _extract_requirements_from_page(client, page_text, source_url):
         canonical_topics_list=_CANONICAL_TOPICS_PROMPT_BLOCK,
     )
 
-    data = _call_openai_json(client, JOB_AI_MODEL, prompt, max_tokens=500)
+    data = _call_openai_json(client, JOB_AI_MODEL, prompt, max_tokens=900)
 
     if not data or not isinstance(data, dict):
         return None
@@ -630,16 +731,16 @@ correct_index باید عددی بین ۰ تا ۳ باشد.
 
 def generate_question_bank(client, extracted_postings, question_model, log=print):
     """
-    برای هر مبحث از CANONICAL_TOPICS که واقعاً در حداقل یک آگهی
-    واقعی دیده شده، به نسبت میزان تقاضای واقعی بازار (تعداد
-    آگهی‌هایی که آن مبحث را خواسته‌اند)، چند سؤال تخصصی می‌سازد.
+    برای هر مبحث از CANONICAL_TOPICS (که کل طیف کمک‌حسابدار تا مدیر
+    مالی را پوشش می‌دهد)، سؤال می‌سازد. مبحث‌هایی که این ماه واقعاً
+    در آگهی‌های زیادی دیده شده‌اند، سؤال بیشتری می‌گیرند (چون بازار
+    کار الان بیشتر آن‌ها را می‌خواهد)؛ اما حتی مبحثی که این ماه در
+    هیچ آگهی واقعی دیده نشود، چون می‌دانیم برای پوشش کامل سطوح شغلی
+    لازم است، همچنان یک تعداد سؤال حداقلی (QUESTIONS_PER_TOPIC_BASELINE)
+    برایش ساخته می‌شود تا هیچ سطحی کاملاً از بانک سؤال حذف نشود.
     question_model باید مدلی باشد که از ابزار جست‌وجوی وب پشتیبانی
     می‌کند (همان مدل اصلی ربات، AI_MODEL، پیشنهاد می‌شود).
     """
-
-    if not extracted_postings:
-        log("JOB: no extracted postings, cannot generate questions")
-        return []
 
     topic_counts = {t: 0 for t in CANONICAL_TOPICS}
 
@@ -648,14 +749,21 @@ def generate_question_bank(client, extracted_postings, question_model, log=print
             if topic in topic_counts:
                 topic_counts[topic] += 1
 
-    active_topics = [t for t in CANONICAL_TOPICS if topic_counts[t] > 0]
+    if not extracted_postings:
+        log(
+            "JOB: این دور هیچ آگهی واقعی استخراج نشد (مثلا اسکرپ "
+            "همه سایت‌ها ناموفق بود)؛ بانک سؤال فقط با سطح حداقلی "
+            "(QUESTIONS_PER_TOPIC_BASELINE) برای هر مبحث ساخته "
+            "می‌شود تا حداقل پوشش سطوح حفظ شود."
+        )
 
-    if not active_topics:
-        log("JOB: هیچ مبحث فنی واقعی از آگهی‌ها استخراج نشد")
-        return []
+    # برخلاف نسخه قبلی، دیگر مبحث‌هایی که این ماه در هیچ آگهی دیده
+    # نشده‌اند را از بانک حذف نمی‌کنیم — همه CANONICAL_TOPICS همیشه
+    # فعال هستند، فقط تعداد سؤالشان بر اساس تقاضای واقعی فرق دارد.
+    active_topics = CANONICAL_TOPICS
 
     log(
-        "JOB: مبحث‌های فعال بر اساس تقاضای واقعی: "
+        "JOB: تعداد آگهی‌های واقعی که هر مبحث را خواسته‌اند: "
         + "، ".join(f"{t} ({topic_counts[t]})" for t in active_topics)
     )
 
@@ -665,11 +773,12 @@ def generate_question_bank(client, extracted_postings, question_model, log=print
 
         freq = topic_counts[topic]
 
-        count = (
-            QUESTIONS_PER_TOPIC_HIGH
-            if freq >= HIGH_FREQUENCY_THRESHOLD
-            else QUESTIONS_PER_TOPIC_LOW
-        )
+        if freq >= HIGH_FREQUENCY_THRESHOLD:
+            count = QUESTIONS_PER_TOPIC_HIGH
+        elif freq > 0:
+            count = QUESTIONS_PER_TOPIC_LOW
+        else:
+            count = QUESTIONS_PER_TOPIC_BASELINE
 
         prompt = TOPIC_QUESTION_PROMPT.format(topic=topic, count=count)
 
@@ -677,7 +786,7 @@ def generate_question_bank(client, extracted_postings, question_model, log=print
             client,
             question_model,
             prompt,
-            max_tokens=3500,
+            max_tokens=8000,
             use_search=JOB_QUESTION_USE_WEB_SEARCH,
         )
 
@@ -808,7 +917,19 @@ def refresh_job_bank(client, question_model=None, log=print):
 # انتخاب تصادفی و متنوع ۲۰ سؤال از بانک برای یک آزمون
 # =========================================================
 
-def pick_quiz_questions(all_questions, total=QUIZ_QUESTION_COUNT):
+def pick_quiz_questions(
+    all_questions,
+    topics_per_quiz=TOPICS_PER_QUIZ,
+    max_per_topic=MAX_QUESTIONS_PER_TOPIC_IN_QUIZ,
+):
+    """
+    به‌جای پخش کم‌عمق روی همه موضوعات، ابتدا یک زیرمجموعه تصادفی از
+    موضوعات (به تعداد topics_per_quiz) انتخاب می‌شود، سپس از هر
+    موضوع انتخاب‌شده حداکثر max_per_topic سؤال (به تصادف، از بین
+    سؤال‌های موجود همان موضوع در بانک) برداشته می‌شود. اگر موضوعات
+    بانک کمتر از topics_per_quiz باشند، همه موضوعات موجود انتخاب
+    می‌شوند.
+    """
 
     if not all_questions:
         return []
@@ -817,34 +938,22 @@ def pick_quiz_questions(all_questions, total=QUIZ_QUESTION_COUNT):
     for q in all_questions:
         by_topic.setdefault(q["topic"], []).append(q)
 
-    for topic in by_topic:
-        random.shuffle(by_topic[topic])
-
     topics = list(by_topic.keys())
     random.shuffle(topics)
 
-    selected = []
-    topic_counts = {t: 0 for t in topics}
+    selected_topics = topics[:topics_per_quiz]
 
-    # چرخشی از بین موضوعات مختلف انتخاب می‌کنیم تا سؤال‌ها
-    # همه از یک مبحث نباشند
-    changed = True
-    while len(selected) < total and changed:
-        changed = False
-        for topic in topics:
-            if len(selected) >= total:
-                break
-            if topic_counts[topic] >= MAX_QUESTIONS_PER_TOPIC_IN_QUIZ:
-                continue
-            pool = by_topic[topic]
-            if not pool:
-                continue
-            selected.append(pool.pop())
-            topic_counts[topic] += 1
-            changed = True
+    selected = []
+
+    for topic in selected_topics:
+
+        pool = by_topic[topic][:]
+        random.shuffle(pool)
+
+        selected.extend(pool[:max_per_topic])
 
     random.shuffle(selected)
-    return selected[:total]
+    return selected
 
 
 # =========================================================
