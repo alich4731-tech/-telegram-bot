@@ -5,6 +5,17 @@ from pathlib import Path
 AI_QUESTION_LIMIT = 3
 AI_USAGE_FILE = Path(os.getenv("AI_USAGE_FILE", "data/ai_usage.json"))
 
+SUPABASE_URL = os.getenv("SUPABASE_URL") or ""
+SUPABASE_KEY = os.getenv("SUPABASE_KEY") or ""
+_supabase = None
+
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        from supabase import create_client
+        _supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as exc:
+        print(f"SUPABASE INIT ERROR [{type(exc).__name__}]: {exc}")
+
 
 def _load_usage():
     try:
@@ -25,7 +36,30 @@ def _save_usage(data):
     temp_file.replace(AI_USAGE_FILE)
 
 
+def _get_supabase_count(user_id: int) -> int:
+    result = (
+        _supabase.table("ai_usage")
+        .select("question_count")
+        .eq("telegram_user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    rows = result.data or []
+    if not rows:
+        return 0
+    try:
+        return int(rows[0].get("question_count", 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def get_ai_question_count(user_id: int) -> int:
+    if _supabase is not None:
+        try:
+            return _get_supabase_count(user_id)
+        except Exception as exc:
+            print(f"SUPABASE AI USAGE READ ERROR [{type(exc).__name__}]: {exc}")
+
     data = _load_usage()
     try:
         return int(data.get(str(user_id), 0))
@@ -41,7 +75,27 @@ def can_ask_ai(user_id: int) -> bool:
     return get_ai_question_count(user_id) < AI_QUESTION_LIMIT
 
 
+def _consume_supabase_question(user_id: int) -> int:
+    result = _supabase.rpc(
+        "consume_ai_question",
+        {
+            "p_telegram_user_id": user_id,
+            "p_limit": AI_QUESTION_LIMIT,
+        },
+    ).execute()
+    try:
+        return max(0, int(result.data))
+    except (TypeError, ValueError):
+        return 0
+
+
 def consume_ai_question(user_id: int) -> int:
+    if _supabase is not None:
+        try:
+            return _consume_supabase_question(user_id)
+        except Exception as exc:
+            print(f"SUPABASE AI USAGE WRITE ERROR [{type(exc).__name__}]: {exc}")
+
     data = _load_usage()
     key = str(user_id)
     try:
