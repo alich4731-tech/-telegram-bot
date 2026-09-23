@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from openai import OpenAI
 
 from telegram import (
+    Bot,
     Update,
     ReplyKeyboardMarkup,
     KeyboardButton,
@@ -84,6 +85,8 @@ AI_LEGAL_RETRY_ENABLED = (
 CHANNEL_USERNAME = "@Alichavoshiaccounting"
 CHANNEL_NAME = "Alichavoshiaccounting"
 PREREG_ADMIN_CHAT_ID = 8644378885
+PREREG_NOTIFY_BOT_TOKEN = os.getenv("PREREG_NOTIFY_BOT_TOKEN")
+PREREG_COURSE_NAME = "دوره سامانه مودیان"
 AI_QUESTION_LIMIT = 3
 BOT_DESCRIPTION = "دستیار هوشمند حسابداری ACN؛ پاسخ گویی به حسابداری، مالیات، بیمه و اکسل، با محدودیت ۳ سوال در هر نوبت استفاده."
 
@@ -2457,8 +2460,8 @@ async def finish_preregistration(
     registered_at = datetime.now(ZoneInfo("Asia/Tehran")).strftime("%Y-%m-%d %H:%M:%S")
 
     admin_text = (
-        "📝 پیش ثبت نام جدید دوره سامانه مودیان\n\n"
-        f"👤 نام و نام خانوادگی: {name}\n"
+        "📝 پیش ثبت نام جدید\n\n"
+        f"📚 نام دوره: {PREREG_COURSE_NAME}\n"        f"👤 نام و نام خانوادگی: {name}\n"
         f"🏙 شهر: {city}\n"
         f"📞 شماره تماس: {phone}\n"
         f"🆔 آیدی عددی: {user_id}\n"
@@ -2467,9 +2470,15 @@ async def finish_preregistration(
     )
 
     try:
-        await context.bot.send_message(chat_id=PREREG_ADMIN_CHAT_ID, text=admin_text)
+        if not PREREG_NOTIFY_BOT_TOKEN:
+            raise RuntimeError("PREREG_NOTIFY_BOT_TOKEN is not configured")
+        async with Bot(token=PREREG_NOTIFY_BOT_TOKEN) as notification_bot:
+            await notification_bot.send_message(
+                chat_id=PREREG_ADMIN_CHAT_ID,
+                text=admin_text,
+            )
     except Exception as e:
-        print(f"PREREGISTRATION ADMIN SEND ERROR [{type(e).__name__}]: {e}")
+        print(f"PREREGISTRATION ADMIN SEND ERROR [{type(e).__name__}]")
         await update.message.reply_text("⚠️ پیش ثبت نام ارسال نشد. لطفا بعدا دوباره تلاش کنید.")
         return
 
