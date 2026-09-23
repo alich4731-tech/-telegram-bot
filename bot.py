@@ -2345,6 +2345,7 @@ async def courses(
     keyboard = [
         ["🏫 دوره‌های آموزشی حضوری"],
         ["💻 دوره‌های آموزشی آنلاین"],
+        ["🎓 دوره‌های حضوری و آنلاین"],
         ["🏠 منوی اصلی"],
     ]
 
@@ -2367,16 +2368,31 @@ async def in_person_courses(
     ] = "in_person_courses"
 
     keyboard = [
-        ["📝 پیش ثبت نام دوره سامانه مودیان"],
         ["🔙 بازگشت", "🏠 منوی اصلی"],
     ]
 
     await update.message.reply_text(
         "🏫 دوره‌های آموزشی حضوری\n\n"
-        "دوره مورد نظر خود را انتخاب کنید:",
+        "در حال حاضر دوره‌ای در این بخش قرار نگرفته است.",
         reply_markup=create_keyboard(
             keyboard
         ),
+    )
+
+
+async def hybrid_courses(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    context.user_data["menu_level"] = "hybrid_courses"
+
+    await update.message.reply_text(
+        "🎓 دوره‌های حضوری و آنلاین\n\n"
+        "دوره مورد نظر خود را انتخاب کنید:",
+        reply_markup=create_keyboard([
+            ["📝 پیش ثبت نام دوره سامانه مودیان"],
+            ["🔙 بازگشت", "🏠 منوی اصلی"],
+        ]),
     )
 
 
@@ -2489,7 +2505,7 @@ async def finish_preregistration(
 
     context.user_data["prereg_flow"] = None
     context.user_data["prereg_profile"] = {}
-    context.user_data["menu_level"] = "in_person_courses"
+    context.user_data["menu_level"] = "hybrid_courses"
 
     await update.message.reply_text(
         "✅ پیش ثبت نام شما به پایان رسید.\n\n"
@@ -2925,6 +2941,7 @@ async def back(
     elif level in [
         "in_person_courses",
         "online_courses",
+        "hybrid_courses",
     ]:
 
         await courses(
@@ -2936,7 +2953,7 @@ async def back(
 
         context.user_data["prereg_flow"] = None
         context.user_data["prereg_profile"] = {}
-        await in_person_courses(update, context)
+        await hybrid_courses(update, context)
 
     elif level in [
         "instagram",
@@ -3128,6 +3145,13 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
+        filters.Text(["🎓 دوره‌های حضوری و آنلاین"]),
+        hybrid_courses,
+    )
+)
+
+app.add_handler(
+    MessageHandler(
         filters.Text(
             ["📝 پیش ثبت نام دوره سامانه مودیان"]
         ),
@@ -3266,6 +3290,7 @@ MENU_BUTTONS = [
 
     "🏫 دوره‌های آموزشی حضوری",
     "💻 دوره‌های آموزشی آنلاین",
+    "🎓 دوره‌های حضوری و آنلاین",
 
     "📝 پیش ثبت نام دوره سامانه مودیان",
 
