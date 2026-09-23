@@ -3,6 +3,7 @@ import asyncio
 import base64
 import html
 import re
+import time
 
 from openai import OpenAI
 
@@ -80,6 +81,9 @@ AI_LEGAL_RETRY_ENABLED = (
 CHANNEL_USERNAME = "@Alichavoshiaccounting"
 CHANNEL_NAME = "Alichavoshiaccounting"
 PREREG_ADMIN_CHAT_ID = 8644378885
+ADMIN_ONLY_BUTTON = "📋 مدیریت پیش ثبت نام ها"
+ADMIN_DETAILS_BUTTON = "📄 ریز پیش ثبت نام ها"
+ADMIN_DELETE_BUTTON = "🗑 حذف پیش ثبت نام ها"
 AI_QUESTION_LIMIT = 3
 BOT_DESCRIPTION = "دستیار هوشمند حسابداری ACN؛ پاسخ گویی به حسابداری، مالیات، بیمه و اکسل، با محدودیت ۳ سوال در هر نوبت استفاده."
 
@@ -2437,6 +2441,91 @@ async def preregistration_contact(
     await finish_preregistration(update, context, contact.phone_number)
 
 
+def is_prereg_admin(update: Update) -> bool:
+    user = update.effective_user
+    return bool(user and user.id == PREREG_ADMIN_CHAT_ID)
+
+
+async def admin_prereg_menu(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not is_prereg_admin(update):
+        return
+
+    records = context.application.bot_data.get("preregistrations", [])
+    count = len(records)
+
+    await update.message.reply_text(
+        f"📋 مدیریت پیش ثبت نام ها\n\n"
+        f"تعداد پیش ثبت نام های ثبت شده تا این لحظه: {count}\n\n"
+        "در صورتی که می خواهید ریز پیش ثبت نام ها را ببینید، گزینه «ریز پیش ثبت نام ها» را فشار دهید.\n"
+        "برای حذف تمام پیش ثبت نام های ثبت شده نیز گزینه «حذف پیش ثبت نام ها» را انتخاب کنید.",
+        reply_markup=create_keyboard([
+            [ADMIN_DETAILS_BUTTON],
+            [ADMIN_DELETE_BUTTON],
+            ["🏠 منوی اصلی"],
+        ]),
+    )
+
+
+async def admin_prereg_details(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not is_prereg_admin(update):
+        return
+
+    records = context.application.bot_data.get("preregistrations", [])
+
+    if not records:
+        await update.message.reply_text(
+            "📄 هیچ پیش ثبت نامی تا این لحظه ثبت نشده است.",
+            reply_markup=create_keyboard([
+                [ADMIN_ONLY_BUTTON],
+                ["🏠 منوی اصلی"],
+            ]),
+        )
+        return
+
+    await update.message.reply_text(
+        f"📄 ریز پیش ثبت نام ها\n\nتعداد: {len(records)}"
+    )
+
+    for index, record in enumerate(records, 1):
+        details = (
+            f"#{index}\n"
+            f"👤 نام و نام خانوادگی: {record.get('name', 'نامشخص')}\n"
+            f"🏙 شهر: {record.get('city', 'نامشخص')}\n"
+            f"📞 شماره تماس: {record.get('phone', 'نامشخص')}\n"
+            f"🆔 آیدی عددی: {record.get('user_id', 'نامشخص')}\n"
+            f"🔗 نام کاربری: {record.get('username', 'ندارد')}\n"
+            f"🕐 زمان ثبت: {record.get('registered_at', 'نامشخص')}"
+        )
+        await update.message.reply_text(details)
+
+
+async def admin_delete_preregs(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not is_prereg_admin(update):
+        return
+
+    records = context.application.bot_data.get("preregistrations", [])
+    count = len(records)
+    context.application.bot_data["preregistrations"] = []
+
+    await update.message.reply_text(
+        f"🗑 تعداد {count} پیش ثبت نام حذف شد.\n\n"
+        "از این لحظه لیست پیش ثبت نام ها خالی است.",
+        reply_markup=create_keyboard([
+            [ADMIN_ONLY_BUTTON],
+            ["🏠 منوی اصلی"],
+        ]),
+    )
+
+
 async def finish_preregistration(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2449,6 +2538,18 @@ async def finish_preregistration(
     city = (profile.get("city") or "").strip()
     username = f"@{user.username}" if user and user.username else "ندارد"
     user_id = user.id if user else "نامشخص"
+
+    record = {
+        "name": name,
+        "city": city,
+        "phone": phone,
+        "user_id": user_id,
+        "username": username,
+        "registered_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    records = context.application.bot_data.setdefault("preregistrations", [])
+    records.append(record)
 
     admin_text = (
         "📝 پیش ثبت نام جدید دوره سامانه مودیان\n\n"
@@ -3067,6 +3168,27 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
+        filters.Text([ADMIN_ONLY_BUTTON]),
+        admin_prereg_menu,
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text([ADMIN_DETAILS_BUTTON]),
+        admin_prereg_details,
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text([ADMIN_DELETE_BUTTON]),
+        admin_delete_preregs,
+    )
+)
+
+app.add_handler(
+    MessageHandler(
         filters.Text(
             ["🎓 دوره‌های آموزشی"]
         ),
@@ -3248,6 +3370,7 @@ MENU_BUTTONS = [
     "💻 دوره‌های آموزشی آنلاین",
 
     "📝 پیش ثبت نام دوره سامانه مودیان",
+    ADMIN_ONLY_BUTTON,
 
     "📸 اینستاگرام",
     "📢 کانال تلگرام",
