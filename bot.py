@@ -2,8 +2,14 @@ import os
 import asyncio
 import base64
 import html
+import json
 import re
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import gspread
+from google.oauth2.service_account import Credentials
 
 from openai import OpenAI
 
@@ -81,6 +87,9 @@ AI_LEGAL_RETRY_ENABLED = (
 CHANNEL_USERNAME = "@Alichavoshiaccounting"
 CHANNEL_NAME = "Alichavoshiaccounting"
 PREREG_ADMIN_CHAT_ID = 8644378885
+PREREG_SHEET_ID = os.getenv("PREREG_SHEET_ID", "1PUZ_fMIypqmuiT6jKTzI3obaAkAJEs_ymy8DCy8Cu38")
+PREREG_SHEET_NAME = os.getenv("PREREG_SHEET_NAME", "پیش ثبت نام ها")
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 ADMIN_ONLY_BUTTON = "📋 مدیریت پیش ثبت نام ها"
 ADMIN_DETAILS_BUTTON = "📄 ریز پیش ثبت نام ها"
 ADMIN_DELETE_BUTTON = "🗑 حذف پیش ثبت نام ها"
@@ -2375,6 +2384,57 @@ async def in_person_courses(
     )
 
 
+def _prereg_worksheet():
+    if not GOOGLE_SERVICE_ACCOUNT_JSON:
+        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON تنظیم نشده است.")
+
+    info = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+    credentials = Credentials.from_service_account_info(
+        info,
+        scopes=["https://www.googleapis.com/auth/spreadsheets"],
+    )
+    gc = gspread.authorize(credentials)
+    return gc.open_by_key(PREREG_SHEET_ID).worksheet(PREREG_SHEET_NAME)
+
+
+async def _prereg_rows():
+    def _read():
+        worksheet = _prereg_worksheet()
+        values = worksheet.get_all_values()
+        return values[1:] if len(values) > 1 else []
+
+    return await asyncio.to_thread(_read)
+
+
+async def _append_prereg_row(record):
+    def _append():
+        worksheet = _prereg_worksheet()
+        worksheet.append_row(
+            [
+                record["registered_at"],
+                record["name"],
+                record["city"],
+                record["phone"],
+                str(record["user_id"]),
+                record["username"],
+            ],
+            value_input_option="RAW",
+        )
+
+    await asyncio.to_thread(_append)
+
+
+async def _clear_prereg_rows():
+    def _clear():
+        worksheet = _prereg_worksheet()
+        row_count = len(worksheet.get_all_values())
+        if row_count > 1:
+            worksheet.batch_clear([f"A2:F{row_count}"])
+        return max(0, row_count - 1)
+
+    return await asyncio.to_thread(_clear)
+
+
 async def preregistration(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -2456,14 +2516,21 @@ async def admin_prereg_menu(
     if not is_prereg_admin(update):
         return
 
-    records = context.application.bot_data.get("preregistrations", [])
-    count = len(records)
+    try:
+        records = await _prereg_rows()
+        count = len(records)
+    except Exception as e:
+        print(f"PREREG SHEET READ ERROR [{type(e).__name__}]: {e}")
+        await update.message.reply_text(
+            "⚠️ اتصال به Google Sheet برقرار نشد. تنظیمات دسترسی شیت را بررسی کنید."
+        )
+        return
 
     await update.message.reply_text(
         f"📋 مدیریت پیش ثبت نام ها\n\n"
         f"تعداد پیش ثبت نام های ثبت شده تا این لحظه: {count}\n\n"
-        "در صورتی که می خواهید ریز پیش ثبت نام ها را ببینید، گزینه «ریز پیش ثبت نام ها» را فشار دهید.\n"
-        "برای حذف تمام پیش ثبت نام های ثبت شده نیز گزینه «حذف پیش ثبت نام ها» را انتخاب کنید.",
+        "برای مشاهده جزئیات، «ریز پیش ثبت نام ها» را انتخاب کنید.\n"
+        "برای حذف همه موارد، «حذف پیش ثبت نام ها» را انتخاب کنید.",
         reply_markup=create_keyboard([
             [ADMIN_DETAILS_BUTTON],
             [ADMIN_DELETE_BUTTON],
@@ -2479,31 +2546,33 @@ async def admin_prereg_details(
     if not is_prereg_admin(update):
         return
 
-    records = context.application.bot_data.get("preregistrations", [])
+    try:
+        rows = await _prereg_rows()
+    except Exception as e:
+        print(f"PREREG SHEET READ ERROR [{type(e).__name__}]: {e}")
+        await update.message.reply_text("⚠️ دریافت اطلاعات از Google Sheet ناموفق بود.")
+        return
 
-    if not records:
+    if not rows:
         await update.message.reply_text(
             "📄 هیچ پیش ثبت نامی تا این لحظه ثبت نشده است.",
-            reply_markup=create_keyboard([
-                [ADMIN_ONLY_BUTTON],
-                ["🏠 منوی اصلی"],
-            ]),
+            reply_markup=create_keyboard([[ADMIN_ONLY_BUTTON], ["🏠 منوی اصلی"]]),
         )
         return
 
-    await update.message.reply_text(
-        f"📄 ریز پیش ثبت نام ها\n\nتعداد: {len(records)}"
-    )
+    await update.message.reply_text(f"📄 ریز پیش ثبت نام ها\n\nتعداد: {len(rows)}")
 
-    for index, record in enumerate(records, 1):
+    for index, row in enumerate(rows, 1):
+        row = (row + [""] * 6)[:6]
+        registered_at, name, city, phone, user_id, username = row
         details = (
             f"#{index}\n"
-            f"👤 نام و نام خانوادگی: {record.get('name', 'نامشخص')}\n"
-            f"🏙 شهر: {record.get('city', 'نامشخص')}\n"
-            f"📞 شماره تماس: {record.get('phone', 'نامشخص')}\n"
-            f"🆔 آیدی عددی: {record.get('user_id', 'نامشخص')}\n"
-            f"🔗 نام کاربری: {record.get('username', 'ندارد')}\n"
-            f"🕐 زمان ثبت: {record.get('registered_at', 'نامشخص')}"
+            f"👤 نام و نام خانوادگی: {name or 'نامشخص'}\n"
+            f"🏙 شهر: {city or 'نامشخص'}\n"
+            f"📞 شماره تماس: {phone or 'نامشخص'}\n"
+            f"🆔 آیدی عددی: {user_id or 'نامشخص'}\n"
+            f"🔗 نام کاربری: {username or 'ندارد'}\n"
+            f"🕐 زمان ثبت: {registered_at or 'نامشخص'}"
         )
         await update.message.reply_text(details)
 
@@ -2515,17 +2584,17 @@ async def admin_delete_preregs(
     if not is_prereg_admin(update):
         return
 
-    records = context.application.bot_data.get("preregistrations", [])
-    count = len(records)
-    context.application.bot_data["preregistrations"] = []
+    try:
+        count = await _clear_prereg_rows()
+    except Exception as e:
+        print(f"PREREG SHEET DELETE ERROR [{type(e).__name__}]: {e}")
+        await update.message.reply_text("⚠️ حذف اطلاعات از Google Sheet ناموفق بود.")
+        return
 
     await update.message.reply_text(
         f"🗑 تعداد {count} پیش ثبت نام حذف شد.\n\n"
-        "از این لحظه لیست پیش ثبت نام ها خالی است.",
-        reply_markup=create_keyboard([
-            [ADMIN_ONLY_BUTTON],
-            ["🏠 منوی اصلی"],
-        ]),
+        "ردیف عنوان شیت حفظ شد و لیست پیش ثبت نام ها خالی است.",
+        reply_markup=create_keyboard([[ADMIN_ONLY_BUTTON], ["🏠 منوی اصلی"]]),
     )
 
 
@@ -2548,11 +2617,17 @@ async def finish_preregistration(
         "phone": phone,
         "user_id": user_id,
         "username": username,
-        "registered_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "registered_at": datetime.now(ZoneInfo("Asia/Tehran")).strftime("%Y-%m-%d %H:%M:%S"),
     }
 
-    records = context.application.bot_data.setdefault("preregistrations", [])
-    records.append(record)
+    try:
+        await _append_prereg_row(record)
+    except Exception as e:
+        print(f"PREREG SHEET WRITE ERROR [{type(e).__name__}]: {e}")
+        await update.message.reply_text(
+            "⚠️ ثبت اطلاعات انجام نشد. لطفاً چند دقیقه دیگر دوباره تلاش کنید."
+        )
+        return
 
     admin_text = (
         "📝 پیش ثبت نام جدید دوره سامانه مودیان\n\n"
@@ -2560,14 +2635,12 @@ async def finish_preregistration(
         f"🏙 شهر: {city}\n"
         f"📞 شماره تماس: {phone}\n"
         f"🆔 آیدی عددی: {user_id}\n"
-        f"🔗 نام کاربری: {username}"
+        f"🔗 نام کاربری: {username}\n"
+        f"🕐 زمان ثبت: {record['registered_at']}"
     )
 
     try:
-        await context.bot.send_message(
-            chat_id=PREREG_ADMIN_CHAT_ID,
-            text=admin_text,
-        )
+        await context.bot.send_message(chat_id=PREREG_ADMIN_CHAT_ID, text=admin_text)
     except Exception as e:
         print(f"PREREGISTRATION ADMIN SEND ERROR [{type(e).__name__}]: {e}")
 
@@ -2577,7 +2650,7 @@ async def finish_preregistration(
 
     await update.message.reply_text(
         "✅ پیش ثبت نام شما به پایان رسید.\n\n"
-        "اطلاعات شما دریافت شد؛ منتظر تماس ما باشید.",
+        "اطلاعات شما ثبت شد؛ منتظر تماس ما باشید.",
         reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
     )
 
