@@ -3,13 +3,13 @@ import asyncio
 import base64
 import html
 import re
-import time
 
 from openai import OpenAI
 
 from telegram import (
     Update,
     ReplyKeyboardMarkup,
+    KeyboardButton,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
@@ -79,6 +79,9 @@ AI_LEGAL_RETRY_ENABLED = (
 
 CHANNEL_USERNAME = "@Alichavoshiaccounting"
 CHANNEL_NAME = "Alichavoshiaccounting"
+PREREG_ADMIN_CHAT_ID = 8644378885
+AI_QUESTION_LIMIT = 3
+BOT_DESCRIPTION = "دستیار هوشمند حسابداری ACN؛ پاسخ گویی به حسابداری، مالیات، بیمه و اکسل، با محدودیت ۳ سوال برای هر کاربر."
 
 
 # =========================================================
@@ -834,31 +837,6 @@ LEGAL_RESEARCH_INSTRUCTION = """
 
 
 # =========================================================
-# ماژول استخدام‌یاب هوشمند (جدید)
-# =========================================================
-
-import job_hunter
-
-
-JOB_ADMIN_USER_ID = os.getenv("JOB_ADMIN_USER_ID")
-
-# اگر می‌خواهید موقتاً (مثلاً تا تهیه اشتراک OpenAI جدید) هیچ
-# فراخوانی *خودکار* AI برای بخش استخدام‌یاب انجام نشود، این را در
-# Environment Variables برابر "false" بگذارید. با این کار فقط
-# اجرای خودکار ماهانه و اجرای ۶۰ ثانیه‌ای بعد از هر روشن‌شدن
-# غیرفعال می‌شود؛ منوی استخدام‌یاب همچنان با همان بانک سؤال
-# قبلی (اگر وجود داشته باشد) کار می‌کند. دستور دستی /refresh_jobs
-# همیشه در دسترس می‌ماند (چون اجرای آن یک تصمیم آگاهانه شماست، نه
-# هزینه ناخواسته) تا هر وقت خودتان خواستید بتوانید بانک را بسازید.
-# بقیه ربات (دستیار حسابداری) تحت تأثیر قرار نمی‌گیرد.
-JOB_AUTO_REFRESH_ENABLED = (
-    os.getenv("JOB_AUTO_REFRESH_ENABLED", "true").strip().lower() == "true"
-)
-
-JOB_MENU_BUTTON = "🎯 استخدام‌یاب هوشمند"
-
-
-# =========================================================
 # ساخت کیبورد
 # =========================================================
 
@@ -867,6 +845,20 @@ def create_keyboard(buttons):
         buttons,
         resize_keyboard=True,
     )
+
+
+# =========================================================
+# محدودیت سه سوال دستیار هوش مصنوعی
+# =========================================================
+
+def consume_ai_question(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    used = int(context.user_data.get("ai_question_count", 0))
+    if used >= AI_QUESTION_LIMIT:
+        return False
+    context.user_data["ai_question_count"] = used + 1
+    return True
+
+
 
 
 # =========================================================
@@ -1011,13 +1003,12 @@ async def start(
 ):
     context.user_data["menu_level"] = "main"
     context.user_data["ai_mode"] = False
-    context.user_data["job_flow"] = None
-    context.user_data["job_quiz"] = None
+    context.user_data["prereg_flow"] = None
+    context.user_data["prereg_profile"] = {}
 
     keyboard = [
         ["🎓 دوره‌های آموزشی", "🎬 ویدئوهای آموزشی"],
         ["🤖 دستیار هوش مصنوعی"],
-        [JOB_MENU_BUTTON],
         ["📱 ارتباط با ما"],
     ]
 
@@ -1056,6 +1047,7 @@ async def ai_assistant(
     context.user_data["menu_level"] = "ai"
     context.user_data["ai_mode"] = True
     context.user_data["ai_history"] = []
+    context.user_data["ai_question_count"] = 0
 
     keyboard = [
         ["🔙 بازگشت"]
@@ -1074,6 +1066,8 @@ async def ai_assistant(
         "• 💼 سایر موضوعات مرتبط با حسابداری\n\n"
         "🖼️ امکان ارسال عکس سند، فاکتور یا مدرک حسابداری نیز فعال است.\n\n"
         "اکنون پیام خود را ارسال کنید.\n\n"
+        "⚠️ استفاده از دستیار به ۳ سوال محدود است.\n"
+        "پس از پاسخ به ۳ سوال، استفاده از دستیار در این نوبت پایان می یابد.\n\n"
         "🔙 برای خروج از این بخش، گزینه «بازگشت» را انتخاب کنید.",
         reply_markup=create_keyboard(keyboard),
     )
@@ -2056,19 +2050,8 @@ async def ask_ai(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    # =====================================================
-    # اگر کاربر در حال طی‌کردن مراحل استخدام‌یاب هوشمند است
-    # (نام/شهر/سن) این پیام متنی باید به آن بخش هدایت شود، نه
-    # به دستیار هوش مصنوعی حسابداری.
-    # =====================================================
-
-    if context.user_data.get("job_flow"):
-
-        await job_flow_text(
-            update,
-            context
-        )
-
+    if context.user_data.get("prereg_flow"):
+        await preregistration_text(update, context)
         return
 
     if not context.user_data.get(
@@ -2097,6 +2080,13 @@ async def ask_ai(
     if not user_question:
         return
 
+    if int(context.user_data.get("ai_question_count", 0)) >= AI_QUESTION_LIMIT:
+        await update.message.reply_text(
+            "⚠️ سقف ۳ سوال دستیار هوش مصنوعی برای شما تکمیل شده است.\n"
+            "برای شروع مجدد، از «🏠 منوی اصلی» وارد دستیار شوید."
+        )
+        return
+
     if (
         not OPENAI_API_KEY
         or client is None
@@ -2107,6 +2097,12 @@ async def ask_ai(
             "OPENAI_API_KEY را در Environment Variables بررسی کنید."
         )
 
+        return
+
+    if not consume_ai_question(context):
+        await update.message.reply_text(
+            "⚠️ سقف ۳ سوال دستیار هوش مصنوعی برای شما تکمیل شده است."
+        )
         return
 
     thinking_message = (
@@ -2223,6 +2219,12 @@ async def ask_ai_image(
                 "لطفاً تصویر را با حجم کمتر ارسال کنید."
             )
 
+            return
+
+        if not consume_ai_question(context):
+            await update.message.reply_text(
+                "⚠️ سقف ۳ سوال دستیار هوش مصنوعی برای شما تکمیل شده است."
+            )
             return
 
         image_b64 = base64.b64encode(
@@ -2353,8 +2355,7 @@ async def in_person_courses(
     ] = "in_person_courses"
 
     keyboard = [
-        ["📊 دوره آموزش پاور کوئری"],
-        ["📑 دوره سامانه مودیان"],
+        ["📝 پیش ثبت نام دوره سامانه مودیان"],
         ["🔙 بازگشت", "🏠 منوی اصلی"],
     ]
 
@@ -2364,6 +2365,116 @@ async def in_person_courses(
         reply_markup=create_keyboard(
             keyboard
         ),
+    )
+
+
+async def preregistration(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    context.user_data["menu_level"] = "preregistration"
+    context.user_data["prereg_flow"] = "name"
+    context.user_data["prereg_profile"] = {}
+
+    await update.message.reply_text(
+        "📝 پیش ثبت نام دوره سامانه مودیان\n\n"
+        "برای شروع، نام و نام خانوادگی خود را وارد کنید:",
+        reply_markup=create_keyboard([["🔙 بازگشت"]]),
+    )
+
+
+async def preregistration_text(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if not context.user_data.get("prereg_flow"):
+        return False
+
+    text = (update.message.text or "").strip()[:120]
+    if not text:
+        return True
+
+    profile = context.user_data.setdefault("prereg_profile", {})
+    step = context.user_data.get("prereg_flow")
+
+    if step == "name":
+        profile["name"] = text
+        context.user_data["prereg_flow"] = "city"
+        await update.message.reply_text("شهر محل سکونت شما را وارد کنید:")
+        return True
+
+    if step == "city":
+        profile["city"] = text
+        context.user_data["prereg_flow"] = "phone"
+        await update.message.reply_text(
+            "شماره تماس خود را وارد کنید یا از دکمه زیر برای ارسال شماره تماس استفاده کنید:",
+            reply_markup=create_keyboard([[KeyboardButton("📱 ارسال شماره تماس", request_contact=True)], ["🔙 بازگشت"]]),
+        )
+        return True
+
+    if step == "phone":
+        phone = re.sub(r"[^0-9+]", "", text)
+        if len(re.sub(r"\D", "", phone)) < 10:
+            await update.message.reply_text("لطفاً یک شماره تماس معتبر وارد کنید:")
+            return True
+        await finish_preregistration(update, context, phone)
+        return True
+
+    return True
+
+
+async def preregistration_contact(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if context.user_data.get("prereg_flow") != "phone":
+        return
+
+    contact = update.message.contact
+    if not contact or not contact.phone_number:
+        return
+
+    await finish_preregistration(update, context, contact.phone_number)
+
+
+async def finish_preregistration(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    phone: str,
+):
+    profile = context.user_data.get("prereg_profile") or {}
+    user = update.effective_user
+
+    name = (profile.get("name") or "").strip()
+    city = (profile.get("city") or "").strip()
+    username = f"@{user.username}" if user and user.username else "ندارد"
+    user_id = user.id if user else "نامشخص"
+
+    admin_text = (
+        "📝 پیش ثبت نام جدید دوره سامانه مودیان\n\n"
+        f"👤 نام و نام خانوادگی: {name}\n"
+        f"🏙 شهر: {city}\n"
+        f"📞 شماره تماس: {phone}\n"
+        f"🆔 آیدی عددی: {user_id}\n"
+        f"🔗 نام کاربری: {username}"
+    )
+
+    try:
+        await context.bot.send_message(
+            chat_id=PREREG_ADMIN_CHAT_ID,
+            text=admin_text,
+        )
+    except Exception as e:
+        print(f"PREREGISTRATION ADMIN SEND ERROR [{type(e).__name__}]: {e}")
+
+    context.user_data["prereg_flow"] = None
+    context.user_data["prereg_profile"] = {}
+    context.user_data["menu_level"] = "in_person_courses"
+
+    await update.message.reply_text(
+        "✅ پیش ثبت نام شما به پایان رسید.\n\n"
+        "اطلاعات شما دریافت شد؛ منتظر تماس ما باشید.",
+        reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
     )
 
 
@@ -2791,10 +2902,10 @@ async def back(
             context
         )
 
-    elif level == "job":
+    elif level == "preregistration":
 
-        context.user_data["job_flow"] = None
-        context.user_data["job_quiz"] = None
+        context.user_data["prereg_flow"] = None
+        context.user_data["prereg_profile"] = {}
 
         await start(
             update,
@@ -2811,22 +2922,11 @@ async def back(
             context
         )
 
-    elif level in [
-        "tax_system",
-        "power_query",
-    ]:
+    elif level == "preregistration":
 
-        await in_person_courses(
-            update,
-            context
-        )
-
-    elif level == "power_query_link":
-
-        await power_query(
-            update,
-            context
-        )
+        context.user_data["prereg_flow"] = None
+        context.user_data["prereg_profile"] = {}
+        await in_person_courses(update, context)
 
     elif level in [
         "instagram",
@@ -2921,673 +3021,25 @@ async def download_links(
 # =========================================================
 # =========================================================
 
-async def job_hunter_entry(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    # =====================================================
-    # استفاده از این بخش هم مثل دستیار هوش مصنوعی، فقط برای
-    # اعضای کانال آزاد است.
-    # =====================================================
-
-    is_member = await check_channel_membership(
-        update,
-        context
-    )
-
-    if not is_member:
-
-        await show_channel_membership_required(
-            update,
-            context,
-            return_to_main=False,
-        )
-
-        return
-
-    bank = job_hunter.load_question_bank()
-
-    if not bank:
-
-        await update.message.reply_text(
-            "⚠️ بانک سؤال استخدام‌یاب هنوز آماده نشده است.\n"
-            "این بخش هر ماه به‌صورت خودکار از روی آگهی‌های واقعی "
-            "استخدام حسابداری در سایت‌های کاریابی معتبر ساخته "
-            "می‌شود. لطفاً کمی بعد دوباره تلاش کنید.",
-            reply_markup=create_keyboard(
-                [["🏠 منوی اصلی"]]
-            ),
-        )
-
-        return
-
-    context.user_data["menu_level"] = "job"
-    context.user_data["ai_mode"] = False
-    context.user_data["job_quiz"] = None
-
-    context.user_data["job_flow"] = "name"
-    context.user_data["job_profile"] = {}
-
-    await update.message.reply_text(
-        "🎯 استخدام‌یاب هوشمند حسابداری\n\n"
-        "این بخش بر اساس آگهی‌های واقعی استخدام حسابدار، حسابدار "
-        "ارشد، مدیر مالی، رئیس حسابداری و حسابرس در سایت‌های "
-        "کاریابی معتبر ایران ساخته شده است.\n\n"
-        "ابتدا چند سؤال کوتاه از شما می‌پرسم، سپس حدود ۵۰ سؤال تخصصی "
-        "از موضوعات مختلف مطرح می‌شود. در پایان، بر اساس مباحثی "
-        "که در آن‌ها بالای ۸۰٪ موفق بوده‌اید، آگهی‌های استخدام "
-        "واقعی و مرتبط برایتان ارسال می‌شود.\n\n"
-        "لطفاً نام خود را وارد کنید:",
-        reply_markup=create_keyboard(
-            [["🔙 بازگشت"]]
-        ),
-    )
-
-
-async def job_flow_text(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    step = context.user_data.get("job_flow")
-
-    if not step:
-        return
-
-    # =====================================================
-    # اگر کاربر در میانه فرآیند از کانال خارج شده باشد، ادامه
-    # نمی‌دهیم (دقیقا مثل رفتار بخش هوش مصنوعی).
-    # =====================================================
-
-    is_member = await ensure_ai_membership(
-        update,
-        context
-    )
-
-    if not is_member:
-
-        context.user_data["job_flow"] = None
-        context.user_data["job_quiz"] = None
-
-        return
-
-    text = (update.message.text or "").strip()[:100]
-
-    profile = context.user_data.setdefault(
-        "job_profile", {}
-    )
-
-    if step == "name":
-
-        if not text:
-            await update.message.reply_text("لطفاً نام خود را وارد کنید:")
-            return
-
-        profile["name"] = text
-        context.user_data["job_flow"] = "city"
-
-        await update.message.reply_text(
-            f"خوشحالم {text} عزیز 🌱\n\nشهر محل سکونت شما؟"
-        )
-
-        return
-
-    if step == "city":
-
-        if not text:
-            await update.message.reply_text("لطفاً نام شهر را وارد کنید:")
-            return
-
-        profile["city"] = text
-        context.user_data["job_flow"] = "age"
-
-        await update.message.reply_text("سن شما؟ (فقط عدد)")
-
-        return
-
-    if step == "age":
-
-        if not text.isdigit() or not (14 <= int(text) <= 80):
-            await update.message.reply_text(
-                "لطفاً سن را به‌صورت عدد و منطقی وارد کنید (مثلاً 28):"
-            )
-            return
-
-        profile["age"] = int(text)
-        context.user_data["job_flow"] = "gender"
-
-        inline_keyboard = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton("مرد", callback_data="jgender|مرد"),
-                    InlineKeyboardButton("زن", callback_data="jgender|زن"),
-                ]
-            ]
-        )
-
-        await update.message.reply_text(
-            "جنسیت شما؟",
-            reply_markup=inline_keyboard,
-        )
-
-        return
-
-    # در مرحله quiz دیگر متن آزاد پذیرفته نمی‌شود؛ کاربر باید از
-    # دکمه‌های زیر سؤال استفاده کند.
-    if step == "quiz":
-
-        await update.message.reply_text(
-            "لطفاً برای پاسخ به سؤال از دکمه‌های زیر همان سؤال "
-            "استفاده کنید."
-        )
-
-        return
-
-
-async def job_gender_callback(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    query = update.callback_query
-    await query.answer()
-
-    is_member = await ensure_ai_membership(
-        update,
-        context
-    )
-
-    if not is_member:
-
-        context.user_data["job_flow"] = None
-        context.user_data["job_quiz"] = None
-
-        return
-
-    if context.user_data.get("job_flow") != "gender":
-        return
-
-    gender = query.data.split("|", 1)[1]
-
-    profile = context.user_data.setdefault("job_profile", {})
-    profile["gender"] = gender
-
-    bank = job_hunter.load_question_bank()
-
-    quiz_questions = job_hunter.pick_quiz_questions(bank)
-
-    if not quiz_questions:
-
-        await query.edit_message_text(
-            "⚠️ در حال حاضر سؤال کافی برای آزمون وجود ندارد."
-        )
-
-        context.user_data["job_flow"] = None
-
-        return
-
-    context.user_data["job_quiz"] = {
-        "questions": quiz_questions,
-        "idx": 0,
-        "topic_stats": {},
-    }
-
-    context.user_data["job_flow"] = "quiz"
-
-    await query.edit_message_text(
-        f"ممنون {profile.get('name', '')} 🙏\n\n"
-        f"شهر: {profile.get('city', '-')}\n"
-        f"سن: {profile.get('age', '-')}\n"
-        f"جنسیت: {gender}\n\n"
-        "حالا حدود ۵۰ سؤال تخصصی مطرح می‌کنم. برای هر سؤال روی گزینه "
-        "درست بزنید."
-    )
-
-    await _send_job_question(
-        update.effective_chat.id,
-        context,
-    )
-
-
-def _build_question_keyboard(qidx, options):
-
-    buttons = []
-
-    for i, option in enumerate(options):
-
-        label = f"{chr(65 + i)}. {option}"[:60]
-
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    label,
-                    callback_data=f"jans|{qidx}|{i}",
-                )
-            ]
-        )
-
-    return InlineKeyboardMarkup(buttons)
-
-
-async def _send_job_question(chat_id, context):
-
-    quiz = context.user_data.get("job_quiz")
-
-    if not quiz:
-        return
-
-    idx = quiz["idx"]
-    questions = quiz["questions"]
-
-    if idx >= len(questions):
-
-        await _finish_job_quiz(chat_id, context)
-
-        return
-
-    q = questions[idx]
-
-    text = (
-        f"سؤال {idx + 1} از {len(questions)}\n"
-        f"موضوع: {q['topic']}\n\n"
-        f"{q['question']}"
-    )
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=text,
-        reply_markup=_build_question_keyboard(
-            idx, q["options"]
-        ),
-    )
-
-
-async def job_quiz_callback(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    query = update.callback_query
-    await query.answer()
-
-    is_member = await ensure_ai_membership(
-        update,
-        context
-    )
-
-    if not is_member:
-
-        context.user_data["job_flow"] = None
-        context.user_data["job_quiz"] = None
-
-        return
-
-    quiz = context.user_data.get("job_quiz")
-
-    if not quiz:
-        return
-
-    try:
-        _, qidx_str, optidx_str = query.data.split("|")
-        qidx = int(qidx_str)
-        optidx = int(optidx_str)
-    except Exception:
-        return
-
-    if qidx != quiz["idx"]:
-        # این سؤال قبلا پاسخ داده شده یا نامعتبر است
-        return
-
-    questions = quiz["questions"]
-    q = questions[qidx]
-
-    is_correct = (optidx == q["correct_index"])
-
-    stats = quiz["topic_stats"].setdefault(
-        q["topic"], {"correct": 0, "total": 0}
-    )
-
-    stats["total"] += 1
-
-    if is_correct:
-        stats["correct"] += 1
-
-    correct_option_text = q["options"][q["correct_index"]]
-
-    if is_correct:
-        result_line = "✅ پاسخ درست بود."
-    else:
-        result_line = f"❌ پاسخ درست نبود.\nپاسخ صحیح: {correct_option_text}"
-
-    try:
-        await query.edit_message_text(
-            f"سؤال {qidx + 1}: {q['question']}\n\n{result_line}"
-        )
-    except Exception:
-        pass
-
-    quiz["idx"] += 1
-
-    await _send_job_question(
-        update.effective_chat.id,
-        context,
-    )
-
-
-async def _finish_job_quiz(chat_id, context):
-
-    quiz = context.user_data.get("job_quiz")
-    profile = context.user_data.get("job_profile", {})
-
-    if not quiz:
-        return
-
-    topic_stats = quiz["topic_stats"]
-
-    lines = ["📊 نتیجه آزمون شما:\n"]
-
-    qualified_topics = []
-
-    for topic, stats in topic_stats.items():
-
-        total = stats["total"]
-        correct = stats["correct"]
-        percent = (correct / total * 100) if total else 0
-
-        lines.append(
-            f"• {topic}: {correct} از {total} ({percent:.0f}٪)"
-        )
-
-        if total > 0 and (correct / total) >= job_hunter.PASS_THRESHOLD:
-            qualified_topics.append(topic)
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text="\n".join(lines),
-    )
-
-    context.user_data["job_flow"] = None
-    context.user_data["job_quiz"] = None
-
-    if not qualified_topics:
-
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "در این آزمون در هیچ موضوعی به آستانه ۸۰٪ نرسیدید. "
-                "پیشنهاد می‌کنم دوباره مطالعه کنید و بعدا دوباره "
-                "آزمون بدهید 🌱\n\n"
-                "برای بازگشت، «🏠 منوی اصلی» را بزنید."
-            ),
-            reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
-        )
-
-        return
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            "🎉 در این موضوعات عملکرد خوبی داشتید:\n"
-            + "، ".join(qualified_topics)
-            + "\n\nدر حال جست‌وجوی آگهی‌های واقعی مرتبط..."
-        ),
-    )
-
-    city = (profile.get("city") or "").strip()
-
-    try:
-        pool = await asyncio.to_thread(
-            job_hunter.find_live_jobs_grouped_by_city,
-            qualified_topics,
-        )
-    except Exception as e:
-        print(f"JOB LIVE SEARCH ERROR: {e}")
-        pool = []
-
-    by_city = job_hunter.group_pool_by_city(pool)
-
-    if not by_city:
-
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                "در حال حاضر آگهی زنده‌ای برای این موضوعات پیدا نشد؛ "
-                "لطفاً بعدا دوباره امتحان کنید یا مستقیم در سایت‌های "
-                "کاریابی جست‌وجو کنید."
-            ),
-            reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
-        )
-
-        return
-
-    # =====================================================
-    # اول بررسی می‌کنیم آیا در همان شهر خود کاربر آگهی پیدا شده
-    # =====================================================
-
-    matched_city_key = None
-    user_city_norm = job_hunter.normalize_city_name(city)
-
-    if user_city_norm:
-        for city_key in by_city:
-            if job_hunter.normalize_city_name(city_key) == user_city_norm:
-                matched_city_key = city_key
-                break
-
-    def _format_city_entries(entries):
-        lines = []
-        for entry in entries:
-            lines.append(f"• [{entry['topic']}] {entry['url']}")
-        return "\n".join(lines)
-
-    if matched_city_key:
-
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                f"🎉 در شهر «{city}» این آگهی‌های واقعی و مرتبط با "
-                "توانایی‌های شما پیدا شد:\n\n"
-                + _format_city_entries(by_city[matched_city_key])
-            ),
-            reply_markup=create_keyboard([["🏠 منوی اصلی"]]),
-            disable_web_page_preview=True,
-        )
-
-        return
-
-    # =====================================================
-    # در شهر خود کاربر چیزی پیدا نشد؛ فهرست شهرهایی که آگهی در
-    # آن‌ها پیدا شده را به‌صورت دکمه نشان می‌دهیم تا کاربر انتخاب
-    # کند.
-    # =====================================================
-
-    other_cities = [
-        c for c in by_city.keys() if c != "سایر شهرها"
-    ]
-
-    # اگر فقط دسته «سایر شهرها» (شهر نامشخص) داشتیم هم آن را نشان
-    # می‌دهیم، چون بهتر از هیچ‌چیز نشان‌ندادن است.
-    if not other_cities and "سایر شهرها" in by_city:
-        other_cities = ["سایر شهرها"]
-
-    context.user_data["job_result_pool"] = by_city
-    context.user_data["job_cities_list"] = other_cities
-
-    inline_buttons = [
-        [InlineKeyboardButton(c, callback_data=f"jcity|{i}")]
-        for i, c in enumerate(other_cities)
-    ]
-
-    city_label = city or "شهری که وارد کردید"
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            f"در شهر «{city_label}» آگهی‌ای متناسب با توانایی‌های "
-            "شما در این لحظه پیدا نشد.\n\n"
-            "اما در شهرهای زیر آگهی‌های مرتبط پیدا شد؛ اگر مایلید، "
-            "یکی را انتخاب کنید تا لینک‌های آن را برایتان بفرستم:"
-        ),
-        reply_markup=InlineKeyboardMarkup(inline_buttons),
-    )
-
-
-async def job_city_callback(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    query = update.callback_query
-    await query.answer()
-
-    is_member = await ensure_ai_membership(
-        update,
-        context
-    )
-
-    if not is_member:
-        return
-
-    by_city = context.user_data.get("job_result_pool") or {}
-    cities_list = context.user_data.get("job_cities_list") or []
-
-    try:
-        idx = int(query.data.split("|", 1)[1])
-        city_name = cities_list[idx]
-    except Exception:
-        return
-
-    entries = by_city.get(city_name) or []
-
-    if not entries:
-
-        await query.edit_message_text(
-            "متاسفانه این فهرست دیگر در دسترس نیست؛ لطفاً دوباره "
-            "آزمون را شروع کنید."
-        )
-
-        return
-
-    lines = [f"🔹 آگهی‌های مرتبط در «{city_name}»:\n"]
-
-    for entry in entries:
-        lines.append(f"• [{entry['topic']}] {entry['url']}")
-
-    try:
-        await query.edit_message_text(
-            "\n".join(lines),
-            disable_web_page_preview=True,
-        )
-    except Exception:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="\n".join(lines),
-            disable_web_page_preview=True,
-        )
-
-
-# =========================================================
-# دستور مدیریتی برای ساخت/به‌روزرسانی دستی بانک سؤال
-# =========================================================
-
-async def refresh_jobs_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    user = update.effective_user
-
-    if (
-        not JOB_ADMIN_USER_ID
-        or not user
-        or str(user.id) != str(JOB_ADMIN_USER_ID)
-    ):
-        return
-
-    # =====================================================
-    # توجه: JOB_AUTO_REFRESH_ENABLED فقط اجرای خودکار (ماهانه و
-    # استارت‌آپ) را کنترل می‌کند. این دستور دستی همیشه در دسترس
-    # است، چون اجرای آن یک تصمیم آگاهانه شماست، نه یک هزینه
-    # ناخواسته و تکرارشونده — پس حتی وقتی چرخه خودکار خاموش است،
-    # می‌توانید هر وقت خودتان خواستید (مثلاً بعد از تهیه اشتراک
-    # جدید) بانک را دستی بسازید.
-    # =====================================================
-
-    if client is None:
-
-        await update.message.reply_text(
-            "⚠️ OPENAI_API_KEY تنظیم نشده است."
-        )
-
-        return
-
-    await update.message.reply_text(
-        "⏳ در حال جمع‌آوری آگهی‌های واقعی و ساخت بانک سؤال... "
-        "این کار ممکن است چند دقیقه طول بکشد."
-    )
-
-    # این عملیات (اسکرپ + احتمالا مرورگر headless + چند فراخوانی
-    # OpenAI) می‌تواند چند دقیقه طول بکشد؛ برای این‌که در این مدت
-    # کل ربات برای سایر کاربران قفل نشود، در یک ترد جداگانه اجرا
-    # می‌شود.
-    count = await asyncio.to_thread(
-        job_hunter.refresh_job_bank, client, AI_MODEL, print
-    )
-
-    if count:
-
-        await update.message.reply_text(
-            f"✅ بانک سؤال با {count} سؤال به‌روزرسانی شد."
-        )
-
-    else:
-
-        await update.message.reply_text(
-            "⚠️ ساخت بانک سؤال ناموفق بود. لاگ سرور را بررسی کنید."
-        )
-
-
-async def scheduled_job_refresh(context: ContextTypes.DEFAULT_TYPE):
-
-    if client is None:
-        print("JOB: OPENAI_API_KEY not set, skipping scheduled refresh")
-        return
-
-    # =====================================================
-    # این تابع هم هر ۳۰ روز یک‌بار خودکار اجرا می‌شود، و هم ۶۰
-    # ثانیه بعد از هر بار بالا آمدن ربات (تا بعد از ری‌استارت یا
-    # دیپلوی جدید، بانک سؤال خالی نماند). برای این‌که این حالت دوم
-    # باعث ساخت مجدد بی‌مورد و هزینه اضافه نشود، اگر بانک سؤال
-    # همین اواخر (کمتر از ۲۵ روز پیش) ساخته شده باشد، از اجرای
-    # دوباره صرف‌نظر می‌کنیم.
-    # =====================================================
-
-    meta = job_hunter.get_bank_meta()
-
-    if meta and meta.get("generated_at"):
-
-        age_days = (time.time() - meta["generated_at"]) / 86400
-
-        if age_days < 25:
-
-            print(
-                f"JOB: بانک سؤال {age_days:.1f} روز پیش ساخته شده؛ "
-                "نیازی به ساخت مجدد نیست."
-            )
-
-            return
-
-    await asyncio.to_thread(job_hunter.refresh_job_bank, client, AI_MODEL, print)
-
-
 # =========================================================
 # ساخت Application
 # =========================================================
+
+async def post_init(application: Application):
+    try:
+        await application.bot.set_my_description(BOT_DESCRIPTION)
+    except Exception as e:
+        print(f"BOT DESCRIPTION ERROR [{type(e).__name__}]: {e}")
+
 
 app = (
     Application
     .builder()
     .token(TOKEN)
+    .concurrent_updates(32)
+    .connection_pool_size(64)
+    .pool_timeout(5.0)
+    .post_init(post_init)
     .build()
 )
 
@@ -3604,17 +3056,6 @@ app.add_handler(
 )
 
 
-# =========================================================
-# دستور مدیریتی استخدام‌یاب
-# =========================================================
-
-app.add_handler(
-    CommandHandler(
-        "refresh_jobs",
-        refresh_jobs_command,
-    )
-)
-
 
 # =========================================================
 # هوش مصنوعی
@@ -3626,41 +3067,6 @@ app.add_handler(
             ["🤖 دستیار هوش مصنوعی"]
         ),
         ai_assistant,
-    )
-)
-
-
-# =========================================================
-# استخدام‌یاب هوشمند
-# =========================================================
-
-app.add_handler(
-    MessageHandler(
-        filters.Text(
-            [JOB_MENU_BUTTON]
-        ),
-        job_hunter_entry,
-    )
-)
-
-app.add_handler(
-    CallbackQueryHandler(
-        job_gender_callback,
-        pattern=r"^jgender\|",
-    )
-)
-
-app.add_handler(
-    CallbackQueryHandler(
-        job_quiz_callback,
-        pattern=r"^jans\|",
-    )
-)
-
-app.add_handler(
-    CallbackQueryHandler(
-        job_city_callback,
-        pattern=r"^jcity\|",
     )
 )
 
@@ -3713,6 +3119,22 @@ app.add_handler(
 app.add_handler(
     MessageHandler(
         filters.Text(
+            ["📝 پیش ثبت نام دوره سامانه مودیان"]
+        ),
+        preregistration,
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.CONTACT,
+        preregistration_contact,
+    )
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.Text(
             ["💻 دوره‌های آموزشی آنلاین"]
         ),
         online_courses,
@@ -3723,33 +3145,6 @@ app.add_handler(
 # =========================================================
 # دوره‌های حضوری
 # =========================================================
-
-app.add_handler(
-    MessageHandler(
-        filters.Text(
-            ["📊 دوره آموزش پاور کوئری"]
-        ),
-        power_query,
-    )
-)
-
-app.add_handler(
-    MessageHandler(
-        filters.Text(
-            ["📑 دوره سامانه مودیان"]
-        ),
-        tax_system,
-    )
-)
-
-app.add_handler(
-    MessageHandler(
-        filters.Text(
-            ["📊 مشاهده و ثبت‌نام دوره"]
-        ),
-        power_query_link,
-    )
-)
 
 
 # =========================================================
@@ -3855,7 +3250,6 @@ app.add_handler(
 
 MENU_BUTTONS = [
     "🤖 دستیار هوش مصنوعی",
-    JOB_MENU_BUTTON,
     "🎓 دوره‌های آموزشی",
     "🎬 ویدئوهای آموزشی",
     "📱 ارتباط با ما",
@@ -3863,9 +3257,7 @@ MENU_BUTTONS = [
     "🏫 دوره‌های آموزشی حضوری",
     "💻 دوره‌های آموزشی آنلاین",
 
-    "📊 دوره آموزش پاور کوئری",
-    "📑 دوره سامانه مودیان",
-    "📊 مشاهده و ثبت‌نام دوره",
+    "📝 پیش ثبت نام دوره سامانه مودیان",
 
     "📸 اینستاگرام",
     "📢 کانال تلگرام",
@@ -3907,47 +3299,6 @@ app.add_handler(
         ask_ai,
     )
 )
-
-
-# =========================================================
-# زمان‌بندی ماهانه به‌روزرسانی بانک سؤال استخدام‌یاب
-# =========================================================
-#
-# نیازمند نصب پکیج با اکستنشن job-queue است:
-#   pip install "python-telegram-bot[job-queue]"
-#
-# first=60 یعنی ۶۰ ثانیه بعد از بالا آمدن ربات یک‌بار اجرا می‌شود
-# (تا بانک سؤال خالی نماند)، سپس هر ۳۰ روز یک‌بار تکرار می‌شود.
-# توجه: اگر سرویس روی Render ری‌استارت شود، شمارش دوباره از صفر
-# شروع می‌شود. برای اطمینان کامل، از دستور دستی /refresh_jobs
-# هم می‌توانید استفاده کنید.
-# =========================================================
-
-if not JOB_AUTO_REFRESH_ENABLED:
-
-    print(
-        "JOB: JOB_AUTO_REFRESH_ENABLED=false است؛ چرخه خودکار "
-        "استخدام‌یاب (ماهانه و استارت‌آپ) غیرفعال شد. منوی "
-        "استخدام‌یاب با بانک سؤال موجود (در صورت وجود) کار "
-        "می‌کند."
-    )
-
-elif app.job_queue is not None:
-
-    app.job_queue.run_repeating(
-        scheduled_job_refresh,
-        interval=30 * 24 * 60 * 60,
-        first=60,
-    )
-
-else:
-
-    print(
-        "WARNING: JobQueue فعال نیست. برای زمان‌بندی خودکار ماهانه، "
-        "پکیج را با دستور زیر نصب کنید:\n"
-        "pip install \"python-telegram-bot[job-queue]\"\n"
-        "در غیر این صورت فقط از دستور دستی /refresh_jobs استفاده کنید."
-    )
 
 
 # =========================================================
