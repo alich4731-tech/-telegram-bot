@@ -7,7 +7,6 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import psycopg
 
 from openai import OpenAI
 
@@ -85,10 +84,6 @@ AI_LEGAL_RETRY_ENABLED = (
 CHANNEL_USERNAME = "@Alichavoshiaccounting"
 CHANNEL_NAME = "Alichavoshiaccounting"
 PREREG_ADMIN_CHAT_ID = 8644378885
-DATABASE_URL = os.getenv("DATABASE_URL")
-ADMIN_ONLY_BUTTON = "📋 مدیریت پیش ثبت نام ها"
-ADMIN_DETAILS_BUTTON = "📄 ریز پیش ثبت نام ها"
-ADMIN_DELETE_BUTTON = "🗑 حذف پیش ثبت نام ها"
 AI_QUESTION_LIMIT = 3
 BOT_DESCRIPTION = "دستیار هوشمند حسابداری ACN؛ پاسخ گویی به حسابداری، مالیات، بیمه و اکسل، با محدودیت ۳ سوال در هر نوبت استفاده."
 
@@ -1020,9 +1015,6 @@ async def start(
         ["🤖 دستیار هوش مصنوعی"],
         ["📱 ارتباط با ما"],
     ]
-
-    if is_prereg_admin(update):
-        keyboard.append([ADMIN_ONLY_BUTTON])
 
     await update.message.reply_text(
         "سلام 👋\n\n"
@@ -2380,73 +2372,6 @@ async def in_person_courses(
     )
 
 
-def _prereg_connect():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL تنظیم نشده است.")
-    return psycopg.connect(DATABASE_URL)
-
-
-def _ensure_prereg_table_sync():
-    with _prereg_connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS preregistrations (
-                    id BIGSERIAL PRIMARY KEY,
-                    registered_at TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    city TEXT NOT NULL,
-                    phone TEXT NOT NULL,
-                    telegram_id TEXT NOT NULL,
-                    username TEXT NOT NULL
-                )
-            """)
-        conn.commit()
-
-
-async def _prereg_rows():
-    def _read():
-        _ensure_prereg_table_sync()
-        with _prereg_connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT registered_at, name, city, phone, telegram_id, username
-                    FROM preregistrations
-                    ORDER BY id ASC
-                """)
-                return [list(row) for row in cur.fetchall()]
-    return await asyncio.to_thread(_read)
-
-
-async def _append_prereg_row(record):
-    def _append():
-        _ensure_prereg_table_sync()
-        with _prereg_connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO preregistrations
-                    (registered_at, name, city, phone, telegram_id, username)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
-                    record["registered_at"], record["name"], record["city"],
-                    record["phone"], str(record["user_id"]), record["username"],
-                ))
-            conn.commit()
-    await asyncio.to_thread(_append)
-
-
-async def _clear_prereg_rows():
-    def _clear():
-        _ensure_prereg_table_sync()
-        with _prereg_connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM preregistrations")
-                count = cur.fetchone()[0]
-                cur.execute("DELETE FROM preregistrations")
-            conn.commit()
-        return count
-    return await asyncio.to_thread(_clear)
-
-
 async def preregistration(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -2516,100 +2441,6 @@ async def preregistration_contact(
     await finish_preregistration(update, context, contact.phone_number)
 
 
-def is_prereg_admin(update: Update) -> bool:
-    user = update.effective_user
-    return bool(user and user.id == PREREG_ADMIN_CHAT_ID)
-
-
-async def admin_prereg_menu(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if not is_prereg_admin(update):
-        return
-
-    try:
-        records = await _prereg_rows()
-        count = len(records)
-    except Exception as e:
-        print(f"PREREG DATABASE READ ERROR [{type(e).__name__}]: {e}")
-        await update.message.reply_text(
-            "⚠️ اتصال به دیتابیس برقرار نشد. لطفا بعدا دوباره تلاش کنید."
-        )
-        return
-
-    await update.message.reply_text(
-        f"📋 مدیریت پیش ثبت نام ها\n\n"
-        f"تعداد پیش ثبت نام های ثبت شده تا این لحظه: {count}\n\n"
-        "برای مشاهده جزئیات، «ریز پیش ثبت نام ها» را انتخاب کنید.\n"
-        "برای حذف همه موارد، «حذف پیش ثبت نام ها» را انتخاب کنید.",
-        reply_markup=create_keyboard([
-            [ADMIN_DETAILS_BUTTON],
-            [ADMIN_DELETE_BUTTON],
-            ["🏠 منوی اصلی"],
-        ]),
-    )
-
-
-async def admin_prereg_details(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if not is_prereg_admin(update):
-        return
-
-    try:
-        rows = await _prereg_rows()
-    except Exception as e:
-        print(f"PREREG DATABASE READ ERROR [{type(e).__name__}]: {e}")
-        await update.message.reply_text("⚠️ دریافت اطلاعات از دیتابیس ناموفق بود.")
-        return
-
-    if not rows:
-        await update.message.reply_text(
-            "📄 هیچ پیش ثبت نامی تا این لحظه ثبت نشده است.",
-            reply_markup=create_keyboard([[ADMIN_ONLY_BUTTON], ["🏠 منوی اصلی"]]),
-        )
-        return
-
-    await update.message.reply_text(f"📄 ریز پیش ثبت نام ها\n\nتعداد: {len(rows)}")
-
-    for index, row in enumerate(rows, 1):
-        row = (row + [""] * 6)[:6]
-        registered_at, name, city, phone, user_id, username = row
-        details = (
-            f"#{index}\n"
-            f"👤 نام و نام خانوادگی: {name or 'نامشخص'}\n"
-            f"🏙 شهر: {city or 'نامشخص'}\n"
-            f"📞 شماره تماس: {phone or 'نامشخص'}\n"
-            f"🆔 آیدی عددی: {user_id or 'نامشخص'}\n"
-            f"🔗 نام کاربری: {username or 'ندارد'}\n"
-            f"🕐 زمان ثبت: {registered_at or 'نامشخص'}"
-        )
-        await update.message.reply_text(details)
-
-
-async def admin_delete_preregs(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if not is_prereg_admin(update):
-        return
-
-    try:
-        count = await _clear_prereg_rows()
-    except Exception as e:
-        print(f"PREREG DATABASE DELETE ERROR [{type(e).__name__}]: {e}")
-        await update.message.reply_text("⚠️ حذف اطلاعات از دیتابیس ناموفق بود.")
-        return
-
-    await update.message.reply_text(
-        f"🗑 تعداد {count} پیش ثبت نام حذف شد.\n\n"
-        "لیست پیش ثبت نام ها خالی است.",
-        reply_markup=create_keyboard([[ADMIN_ONLY_BUTTON], ["🏠 منوی اصلی"]]),
-    )
-
-
 async def finish_preregistration(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2623,23 +2454,7 @@ async def finish_preregistration(
     username = f"@{user.username}" if user and user.username else "ندارد"
     user_id = user.id if user else "نامشخص"
 
-    record = {
-        "name": name,
-        "city": city,
-        "phone": phone,
-        "user_id": user_id,
-        "username": username,
-        "registered_at": datetime.now(ZoneInfo("Asia/Tehran")).strftime("%Y-%m-%d %H:%M:%S"),
-    }
-
-    try:
-        await _append_prereg_row(record)
-    except Exception as e:
-        print(f"PREREG DATABASE WRITE ERROR [{type(e).__name__}]: {e}")
-        await update.message.reply_text(
-            "⚠️ ثبت اطلاعات انجام نشد. لطفاً چند دقیقه دیگر دوباره تلاش کنید."
-        )
-        return
+    registered_at = datetime.now(ZoneInfo("Asia/Tehran")).strftime("%Y-%m-%d %H:%M:%S")
 
     admin_text = (
         "📝 پیش ثبت نام جدید دوره سامانه مودیان\n\n"
@@ -2648,13 +2463,15 @@ async def finish_preregistration(
         f"📞 شماره تماس: {phone}\n"
         f"🆔 آیدی عددی: {user_id}\n"
         f"🔗 نام کاربری: {username}\n"
-        f"🕐 زمان ثبت: {record['registered_at']}"
+        f"🕐 زمان ثبت: {registered_at}"
     )
 
     try:
         await context.bot.send_message(chat_id=PREREG_ADMIN_CHAT_ID, text=admin_text)
     except Exception as e:
         print(f"PREREGISTRATION ADMIN SEND ERROR [{type(e).__name__}]: {e}")
+        await update.message.reply_text("⚠️ پیش ثبت نام ارسال نشد. لطفا بعدا دوباره تلاش کنید.")
+        return
 
     context.user_data["prereg_flow"] = None
     context.user_data["prereg_profile"] = {}
@@ -3256,27 +3073,6 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
-        filters.Text([ADMIN_ONLY_BUTTON]),
-        admin_prereg_menu,
-    )
-)
-
-app.add_handler(
-    MessageHandler(
-        filters.Text([ADMIN_DETAILS_BUTTON]),
-        admin_prereg_details,
-    )
-)
-
-app.add_handler(
-    MessageHandler(
-        filters.Text([ADMIN_DELETE_BUTTON]),
-        admin_delete_preregs,
-    )
-)
-
-app.add_handler(
-    MessageHandler(
         filters.Text(
             ["🎓 دوره‌های آموزشی"]
         ),
@@ -3458,7 +3254,6 @@ MENU_BUTTONS = [
     "💻 دوره‌های آموزشی آنلاین",
 
     "📝 پیش ثبت نام دوره سامانه مودیان",
-    ADMIN_ONLY_BUTTON,
 
     "📸 اینستاگرام",
     "📢 کانال تلگرام",
