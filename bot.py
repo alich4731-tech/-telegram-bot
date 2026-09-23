@@ -2532,9 +2532,9 @@ async def admin_prereg_menu(
         records = await _prereg_rows()
         count = len(records)
     except Exception as e:
-        print(f"PREREG SHEET READ ERROR [{type(e).__name__}]: {e}")
+        print(f"PREREG DATABASE READ ERROR [{type(e).__name__}]: {e}")
         await update.message.reply_text(
-            "⚠️ اتصال به دیتابیس برقرار نشد. تنظیمات دسترسی شیت را بررسی کنید."
+            "⚠️ اتصال به دیتابیس برقرار نشد. لطفا بعدا دوباره تلاش کنید."
         )
         return
 
@@ -2561,7 +2561,7 @@ async def admin_prereg_details(
     try:
         rows = await _prereg_rows()
     except Exception as e:
-        print(f"PREREG SHEET READ ERROR [{type(e).__name__}]: {e}")
+        print(f"PREREG DATABASE READ ERROR [{type(e).__name__}]: {e}")
         await update.message.reply_text("⚠️ دریافت اطلاعات از دیتابیس ناموفق بود.")
         return
 
@@ -2599,13 +2599,13 @@ async def admin_delete_preregs(
     try:
         count = await _clear_prereg_rows()
     except Exception as e:
-        print(f"PREREG SHEET DELETE ERROR [{type(e).__name__}]: {e}")
+        print(f"PREREG DATABASE DELETE ERROR [{type(e).__name__}]: {e}")
         await update.message.reply_text("⚠️ حذف اطلاعات از دیتابیس ناموفق بود.")
         return
 
     await update.message.reply_text(
         f"🗑 تعداد {count} پیش ثبت نام حذف شد.\n\n"
-        "ردیف عنوان شیت حفظ شد و لیست پیش ثبت نام ها خالی است.",
+        "لیست پیش ثبت نام ها خالی است.",
         reply_markup=create_keyboard([[ADMIN_ONLY_BUTTON], ["🏠 منوی اصلی"]]),
     )
 
@@ -2635,7 +2635,7 @@ async def finish_preregistration(
     try:
         await _append_prereg_row(record)
     except Exception as e:
-        print(f"PREREG SHEET WRITE ERROR [{type(e).__name__}]: {e}")
+        print(f"PREREG DATABASE WRITE ERROR [{type(e).__name__}]: {e}")
         await update.message.reply_text(
             "⚠️ ثبت اطلاعات انجام نشد. لطفاً چند دقیقه دیگر دوباره تلاش کنید."
         )
