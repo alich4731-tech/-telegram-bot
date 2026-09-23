@@ -1016,6 +1016,9 @@ async def start(
         ["📱 ارتباط با ما"],
     ]
 
+    if is_prereg_admin(update):
+        keyboard.append([ADMIN_ONLY_BUTTON])
+
     await update.message.reply_text(
         "سلام 👋\n\n"
         "به ربات ما خوش آمدید 🌱\n\n"
