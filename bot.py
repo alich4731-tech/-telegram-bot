@@ -2,14 +2,12 @@ import os
 import asyncio
 import base64
 import html
-import json
 import re
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import gspread
-from google.oauth2.service_account import Credentials
+import psycopg
 
 from openai import OpenAI
 
@@ -87,9 +85,7 @@ AI_LEGAL_RETRY_ENABLED = (
 CHANNEL_USERNAME = "@Alichavoshiaccounting"
 CHANNEL_NAME = "Alichavoshiaccounting"
 PREREG_ADMIN_CHAT_ID = 8644378885
-PREREG_SHEET_ID = os.getenv("PREREG_SHEET_ID", "1PUZ_fMIypqmuiT6jKTzI3obaAkAJEs_ymy8DCy8Cu38")
-PREREG_SHEET_NAME = os.getenv("PREREG_SHEET_NAME", "پیش ثبت نام ها")
-GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+DATABASE_URL = os.getenv("DATABASE_URL")
 ADMIN_ONLY_BUTTON = "📋 مدیریت پیش ثبت نام ها"
 ADMIN_DETAILS_BUTTON = "📄 ریز پیش ثبت نام ها"
 ADMIN_DELETE_BUTTON = "🗑 حذف پیش ثبت نام ها"
@@ -2384,54 +2380,70 @@ async def in_person_courses(
     )
 
 
-def _prereg_worksheet():
-    if not GOOGLE_SERVICE_ACCOUNT_JSON:
-        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON تنظیم نشده است.")
+def _prereg_connect():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL تنظیم نشده است.")
+    return psycopg.connect(DATABASE_URL)
 
-    info = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
-    credentials = Credentials.from_service_account_info(
-        info,
-        scopes=["https://www.googleapis.com/auth/spreadsheets"],
-    )
-    gc = gspread.authorize(credentials)
-    return gc.open_by_key(PREREG_SHEET_ID).worksheet(PREREG_SHEET_NAME)
+
+def _ensure_prereg_table_sync():
+    with _prereg_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS preregistrations (
+                    id BIGSERIAL PRIMARY KEY,
+                    registered_at TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    city TEXT NOT NULL,
+                    phone TEXT NOT NULL,
+                    telegram_id TEXT NOT NULL,
+                    username TEXT NOT NULL
+                )
+            """)
+        conn.commit()
 
 
 async def _prereg_rows():
     def _read():
-        worksheet = _prereg_worksheet()
-        values = worksheet.get_all_values()
-        return values[1:] if len(values) > 1 else []
-
+        _ensure_prereg_table_sync()
+        with _prereg_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT registered_at, name, city, phone, telegram_id, username
+                    FROM preregistrations
+                    ORDER BY id ASC
+                """)
+                return [list(row) for row in cur.fetchall()]
     return await asyncio.to_thread(_read)
 
 
 async def _append_prereg_row(record):
     def _append():
-        worksheet = _prereg_worksheet()
-        worksheet.append_row(
-            [
-                record["registered_at"],
-                record["name"],
-                record["city"],
-                record["phone"],
-                str(record["user_id"]),
-                record["username"],
-            ],
-            value_input_option="RAW",
-        )
-
+        _ensure_prereg_table_sync()
+        with _prereg_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO preregistrations
+                    (registered_at, name, city, phone, telegram_id, username)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    record["registered_at"], record["name"], record["city"],
+                    record["phone"], str(record["user_id"]), record["username"],
+                ))
+            conn.commit()
     await asyncio.to_thread(_append)
 
 
 async def _clear_prereg_rows():
     def _clear():
-        worksheet = _prereg_worksheet()
-        row_count = len(worksheet.get_all_values())
-        if row_count > 1:
-            worksheet.batch_clear([f"A2:F{row_count}"])
-        return max(0, row_count - 1)
-
+        _ensure_prereg_table_sync()
+        with _prereg_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM preregistrations")
+                count = cur.fetchone()[0]
+                cur.execute("DELETE FROM preregistrations")
+            conn.commit()
+        return count
     return await asyncio.to_thread(_clear)
 
 
@@ -2522,7 +2534,7 @@ async def admin_prereg_menu(
     except Exception as e:
         print(f"PREREG SHEET READ ERROR [{type(e).__name__}]: {e}")
         await update.message.reply_text(
-            "⚠️ اتصال به Google Sheet برقرار نشد. تنظیمات دسترسی شیت را بررسی کنید."
+            "⚠️ اتصال به دیتابیس برقرار نشد. تنظیمات دسترسی شیت را بررسی کنید."
         )
         return
 
@@ -2550,7 +2562,7 @@ async def admin_prereg_details(
         rows = await _prereg_rows()
     except Exception as e:
         print(f"PREREG SHEET READ ERROR [{type(e).__name__}]: {e}")
-        await update.message.reply_text("⚠️ دریافت اطلاعات از Google Sheet ناموفق بود.")
+        await update.message.reply_text("⚠️ دریافت اطلاعات از دیتابیس ناموفق بود.")
         return
 
     if not rows:
@@ -2588,7 +2600,7 @@ async def admin_delete_preregs(
         count = await _clear_prereg_rows()
     except Exception as e:
         print(f"PREREG SHEET DELETE ERROR [{type(e).__name__}]: {e}")
-        await update.message.reply_text("⚠️ حذف اطلاعات از Google Sheet ناموفق بود.")
+        await update.message.reply_text("⚠️ حذف اطلاعات از دیتابیس ناموفق بود.")
         return
 
     await update.message.reply_text(
