@@ -8,7 +8,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from telegram import (
     Bot,
@@ -118,7 +118,7 @@ if not OPENAI_API_KEY:
 client = None
 
 if OPENAI_API_KEY:
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=OPENAI_API_KEY
     )
 
@@ -1895,7 +1895,7 @@ async def _request_ai(
         try:
 
             attempt_response = (
-                client.responses.create(
+                await client.responses.create(
                     **build_request(
                         attempt["tokens"],
                         attempt["search"],
@@ -3054,9 +3054,17 @@ async def download_links(
 
 async def post_init(application: Application):
     try:
-        await application.bot.set_my_description(BOT_DESCRIPTION)
+        # Profile maintenance must not hold up webhook startup on a slow API.
+        await asyncio.wait_for(
+            application.bot.set_my_description(BOT_DESCRIPTION), timeout=3.0
+        )
     except Exception as e:
         print(f"BOT DESCRIPTION ERROR [{type(e).__name__}]: {e}")
+
+
+async def post_shutdown(application: Application):
+    if client is not None:
+        await client.close()
 
 
 app = (
@@ -3067,6 +3075,7 @@ app = (
     .connection_pool_size(64)
     .pool_timeout(5.0)
     .post_init(post_init)
+    .post_shutdown(post_shutdown)
     .build()
 )
 
