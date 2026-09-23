@@ -81,7 +81,7 @@ CHANNEL_USERNAME = "@Alichavoshiaccounting"
 CHANNEL_NAME = "Alichavoshiaccounting"
 PREREG_ADMIN_CHAT_ID = 8644378885
 AI_QUESTION_LIMIT = 3
-BOT_DESCRIPTION = "دستیار هوشمند حسابداری ACN؛ پاسخ گویی به حسابداری، مالیات، بیمه و اکسل، با محدودیت ۳ سوال برای هر کاربر."
+BOT_DESCRIPTION = "دستیار هوشمند حسابداری ACN؛ پاسخ گویی به حسابداری، مالیات، بیمه و اکسل، با محدودیت ۳ سوال در هر نوبت استفاده."
 
 
 # =========================================================
@@ -2896,16 +2896,6 @@ async def back(
         context.user_data[
             "ai_mode"
         ] = False
-
-        await start(
-            update,
-            context
-        )
-
-    elif level == "preregistration":
-
-        context.user_data["prereg_flow"] = None
-        context.user_data["prereg_profile"] = {}
 
         await start(
             update,
