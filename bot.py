@@ -96,6 +96,11 @@ BOT_DESCRIPTION = "دستیار هوشمند حسابداری ACN؛ پاسخ گ�
 # =========================================================
 
 if not TOKEN:
+    related_keys = sorted(
+        key for key in os.environ
+        if "BOT" in key.upper() or "TELEGRAM" in key.upper()
+    )
+    print(f"BOT_TOKEN MISSING; RELATED_ENV_KEYS={related_keys}", flush=True)
     raise ValueError(
         "BOT_TOKEN در Environment Variables تنظیم نشده است."
     )
