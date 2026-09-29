@@ -2533,6 +2533,33 @@ async def preregistration_contact(
     await finish_preregistration(update, context, phone)
 
 
+async def _send_preregistration_notification(admin_text: str):
+    if not PREREG_NOTIFY_BOT_TOKEN:
+        raise RuntimeError("PREREG_NOTIFY_BOT_TOKEN is not configured")
+
+    notification_bot = Bot(token=PREREG_NOTIFY_BOT_TOKEN)
+
+    try:
+        # Never let the separate notification bot block the user flow forever.
+        await asyncio.wait_for(notification_bot.initialize(), timeout=5.0)
+        await asyncio.wait_for(
+            notification_bot.send_message(
+                chat_id=PREREG_ADMIN_CHAT_ID,
+                text=admin_text,
+                connect_timeout=5.0,
+                read_timeout=8.0,
+                write_timeout=8.0,
+                pool_timeout=5.0,
+            ),
+            timeout=10.0,
+        )
+    finally:
+        try:
+            await asyncio.wait_for(notification_bot.shutdown(), timeout=3.0)
+        except Exception:
+            pass
+
+
 async def finish_preregistration(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -2561,16 +2588,28 @@ async def finish_preregistration(
     )
 
     try:
-        if not PREREG_NOTIFY_BOT_TOKEN:
-            raise RuntimeError("PREREG_NOTIFY_BOT_TOKEN is not configured")
-        async with Bot(token=PREREG_NOTIFY_BOT_TOKEN) as notification_bot:
-            await notification_bot.send_message(
-                chat_id=PREREG_ADMIN_CHAT_ID,
-                text=admin_text,
-            )
+        await _send_preregistration_notification(admin_text)
+    except asyncio.TimeoutError:
+        print(
+            "PREREGISTRATION ADMIN SEND ERROR [TimeoutError]: "
+            f"course={course_name} user_id={user_id}",
+            flush=True,
+        )
+        await update.message.reply_text(
+            "⚠️ ارتباط با سامانه ثبت نام طول کشید و ثبت نهایی نشد. "
+            "لطفاً شماره تماس را دوباره ارسال کنید."
+        )
+        return
     except Exception as e:
-        print(f"PREREGISTRATION ADMIN SEND ERROR [{type(e).__name__}]")
-        await update.message.reply_text("⚠️ پیش ثبت نام ارسال نشد. لطفا بعدا دوباره تلاش کنید.")
+        print(
+            "PREREGISTRATION ADMIN SEND ERROR "
+            f"[{type(e).__name__}]: {e} "
+            f"course={course_name} user_id={user_id}",
+            flush=True,
+        )
+        await update.message.reply_text(
+            "⚠️ پیش ثبت نام ارسال نشد. لطفاً شماره تماس را دوباره ارسال کنید."
+        )
         return
 
     context.user_data["prereg_flow"] = None
