@@ -87,6 +87,7 @@ CHANNEL_NAME = "Alichavoshiaccounting"
 PREREG_ADMIN_CHAT_ID = 8644378885
 PREREG_NOTIFY_BOT_TOKEN = os.getenv("PREREG_NOTIFY_BOT_TOKEN")
 PREREG_COURSE_NAME = "دوره سامانه مودیان"
+POWER_QUERY_PREREG_COURSE_NAME = "دوره پاور کوئری"
 AI_QUESTION_LIMIT = 3
 BOT_DESCRIPTION = "دستیار هوشمند حسابداری ACN؛ پاسخ گویی به حسابداری، مالیات، بیمه و اکسل، با محدودیت ۳ سوال در هر نوبت استفاده."
 
@@ -2391,8 +2392,26 @@ async def hybrid_courses(
         "دوره مورد نظر خود را انتخاب کنید:",
         reply_markup=create_keyboard([
             ["📝 پیش ثبت نام دوره سامانه مودیان"],
+            ["📝 پیش ثبت نام دوره پاور کوئری"],
             ["🔙 بازگشت", "🏠 منوی اصلی"],
         ]),
+    )
+
+
+async def start_preregistration(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    course_name: str,
+):
+    context.user_data["menu_level"] = "preregistration"
+    context.user_data["prereg_flow"] = "name"
+    context.user_data["prereg_profile"] = {}
+    context.user_data["prereg_course_name"] = course_name
+
+    await update.message.reply_text(
+        f"📝 پیش ثبت نام {course_name}\n\n"
+        "برای شروع، نام و نام خانوادگی خود را وارد کنید:",
+        reply_markup=create_keyboard([["🔙 بازگشت"]]),
     )
 
 
@@ -2400,15 +2419,45 @@ async def preregistration(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    context.user_data["menu_level"] = "preregistration"
-    context.user_data["prereg_flow"] = "name"
-    context.user_data["prereg_profile"] = {}
-
-    await update.message.reply_text(
-        "📝 پیش ثبت نام دوره سامانه مودیان\n\n"
-        "برای شروع، نام و نام خانوادگی خود را وارد کنید:",
-        reply_markup=create_keyboard([["🔙 بازگشت"]]),
+    await start_preregistration(
+        update,
+        context,
+        PREREG_COURSE_NAME,
     )
+
+
+async def power_query_preregistration(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    await start_preregistration(
+        update,
+        context,
+        POWER_QUERY_PREREG_COURSE_NAME,
+    )
+
+
+def normalize_iran_mobile(value: str):
+    if not value:
+        return None
+
+    digit_map = str.maketrans(
+        "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+        "01234567890123456789",
+    )
+    phone = value.translate(digit_map).strip()
+    phone = re.sub(r"[\\s\\-()]", "", phone)
+
+    if re.fullmatch(r"09\\d{9}", phone):
+        return phone
+
+    if re.fullmatch(r"\\+989\\d{9}", phone):
+        return "0" + phone[3:]
+
+    if re.fullmatch(r"989\\d{9}", phone):
+        return "0" + phone[2:]
+
+    return None
 
 
 async def preregistration_text(
@@ -2435,15 +2484,24 @@ async def preregistration_text(
         profile["city"] = text
         context.user_data["prereg_flow"] = "phone"
         await update.message.reply_text(
-            "شماره تماس خود را وارد کنید یا از دکمه زیر برای ارسال شماره تماس استفاده کنید:",
+            "شماره موبایل خود را وارد کنید یا از دکمه زیر برای ارسال شماره تماس استفاده کنید.\n\n"
+            "فرمت قابل قبول:\n"
+            "• 09121234567\n"
+            "• +989121234567\n"
+            "• 989121234567",
             reply_markup=create_keyboard([[KeyboardButton("📱 ارسال شماره تماس", request_contact=True)], ["🔙 بازگشت"]]),
         )
         return True
 
     if step == "phone":
-        phone = re.sub(r"[^0-9+]", "", text)
-        if len(re.sub(r"\D", "", phone)) < 10:
-            await update.message.reply_text("لطفاً یک شماره تماس معتبر وارد کنید:")
+        phone = normalize_iran_mobile(text)
+        if not phone:
+            await update.message.reply_text(
+                "شماره موبایل معتبر نیست. لطفاً با یکی از این قالب‌ها وارد کنید:\n"
+                "• 09121234567\n"
+                "• +989121234567\n"
+                "• 989121234567"
+            )
             return True
         await finish_preregistration(update, context, phone)
         return True
@@ -2462,7 +2520,17 @@ async def preregistration_contact(
     if not contact or not contact.phone_number:
         return
 
-    await finish_preregistration(update, context, contact.phone_number)
+    phone = normalize_iran_mobile(contact.phone_number)
+    if not phone:
+        await update.message.reply_text(
+            "شماره ارسال شده معتبر نیست. لطفاً شماره موبایل ایران را با یکی از این قالب‌ها وارد کنید:\n"
+            "• 09121234567\n"
+            "• +989121234567\n"
+            "• 989121234567"
+        )
+        return
+
+    await finish_preregistration(update, context, phone)
 
 
 async def finish_preregistration(
@@ -2471,6 +2539,7 @@ async def finish_preregistration(
     phone: str,
 ):
     profile = context.user_data.get("prereg_profile") or {}
+    course_name = context.user_data.get("prereg_course_name") or PREREG_COURSE_NAME
     user = update.effective_user
 
     name = (profile.get("name") or "").strip()
@@ -2482,7 +2551,8 @@ async def finish_preregistration(
 
     admin_text = (
         "📝 پیش ثبت نام جدید\n\n"
-        f"📚 نام دوره: {PREREG_COURSE_NAME}\n"        f"👤 نام و نام خانوادگی: {name}\n"
+        f"📚 نام دوره: {course_name}\n"
+        f"👤 نام و نام خانوادگی: {name}\n"
         f"🏙 شهر: {city}\n"
         f"📞 شماره تماس: {phone}\n"
         f"🆔 آیدی عددی: {user_id}\n"
@@ -2505,6 +2575,7 @@ async def finish_preregistration(
 
     context.user_data["prereg_flow"] = None
     context.user_data["prereg_profile"] = {}
+    context.user_data["prereg_course_name"] = None
     context.user_data["menu_level"] = "hybrid_courses"
 
     await update.message.reply_text(
@@ -2953,6 +3024,7 @@ async def back(
 
         context.user_data["prereg_flow"] = None
         context.user_data["prereg_profile"] = {}
+        context.user_data["prereg_course_name"] = None
         await hybrid_courses(update, context)
 
     elif level in [
@@ -3170,6 +3242,15 @@ app.add_handler(
 
 app.add_handler(
     MessageHandler(
+        filters.Text(
+            ["📝 پیش ثبت نام دوره پاور کوئری"]
+        ),
+        power_query_preregistration,
+    )
+)
+
+app.add_handler(
+    MessageHandler(
         filters.CONTACT,
         preregistration_contact,
     )
@@ -3302,6 +3383,7 @@ MENU_BUTTONS = [
     "🏫 + 💻 دوره‌های آموزشی حضوری و آنلاین",
 
     "📝 پیش ثبت نام دوره سامانه مودیان",
+    "📝 پیش ثبت نام دوره پاور کوئری",
 
     "📸 اینستاگرام",
     "📢 کانال تلگرام",
