@@ -3485,6 +3485,13 @@ if not URL:
     )
 
 
+# Python 3.14 no longer creates a default event loop implicitly.
+# python-telegram-bot 21.6 expects one to exist before run_webhook().
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 app.run_webhook(
     listen="0.0.0.0",
     port=PORT,
