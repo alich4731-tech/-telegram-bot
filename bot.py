@@ -4,6 +4,7 @@ import base64
 import html
 import re
 import time
+import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -1018,6 +1019,7 @@ async def start(
     context.user_data["ai_mode"] = False
     context.user_data["prereg_flow"] = None
     context.user_data["prereg_profile"] = {}
+    context.user_data["prereg_course_name"] = None
 
     keyboard = [
         ["🎓 دوره‌های آموزشی", "🎬 ویدئوهای آموزشی"],
@@ -2446,15 +2448,15 @@ def normalize_iran_mobile(value: str):
         "01234567890123456789",
     )
     phone = value.translate(digit_map).strip()
-    phone = re.sub(r"[\\s\\-()]", "", phone)
+    phone = re.sub(r"[\s\-()]", "", phone)
 
-    if re.fullmatch(r"09\\d{9}", phone):
+    if re.fullmatch(r"09\d{9}", phone):
         return phone
 
-    if re.fullmatch(r"\\+989\\d{9}", phone):
+    if re.fullmatch(r"\+989\d{9}", phone):
         return "0" + phone[3:]
 
-    if re.fullmatch(r"989\\d{9}", phone):
+    if re.fullmatch(r"989\d{9}", phone):
         return "0" + phone[2:]
 
     return None
@@ -2533,31 +2535,38 @@ async def preregistration_contact(
     await finish_preregistration(update, context, phone)
 
 
-async def _send_preregistration_notification(admin_text: str):
+def _send_preregistration_notification_sync(admin_text: str):
     if not PREREG_NOTIFY_BOT_TOKEN:
         raise RuntimeError("PREREG_NOTIFY_BOT_TOKEN is not configured")
 
-    notification_bot = Bot(token=PREREG_NOTIFY_BOT_TOKEN)
+    url = f"https://api.telegram.org/bot{PREREG_NOTIFY_BOT_TOKEN}/sendMessage"
+    response = requests.post(
+        url,
+        json={
+            "chat_id": PREREG_ADMIN_CHAT_ID,
+            "text": admin_text,
+        },
+        timeout=(5, 10),
+    )
+    response.raise_for_status()
 
-    try:
-        # Never let the separate notification bot block the user flow forever.
-        await asyncio.wait_for(notification_bot.initialize(), timeout=5.0)
-        await asyncio.wait_for(
-            notification_bot.send_message(
-                chat_id=PREREG_ADMIN_CHAT_ID,
-                text=admin_text,
-                connect_timeout=5.0,
-                read_timeout=8.0,
-                write_timeout=8.0,
-                pool_timeout=5.0,
-            ),
-            timeout=10.0,
+    payload = response.json()
+    if not payload.get("ok"):
+        raise RuntimeError(
+            f"Telegram notification failed: {payload.get('description', 'unknown error')}"
         )
-    finally:
-        try:
-            await asyncio.wait_for(notification_bot.shutdown(), timeout=3.0)
-        except Exception:
-            pass
+
+
+async def _send_preregistration_notification(admin_text: str):
+    # Run the separate bot API call outside the event loop so a slow network
+    # cannot freeze webhook processing for this or other users.
+    await asyncio.wait_for(
+        asyncio.to_thread(
+            _send_preregistration_notification_sync,
+            admin_text,
+        ),
+        timeout=12.0,
+    )
 
 
 async def finish_preregistration(
